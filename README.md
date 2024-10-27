@@ -35,7 +35,7 @@
 
 **SHFLA (Shoegaze Hierarchical Fractal Language Architecture)** is an interdisciplinary project that integrates Cognitive Musicology, Linguistics, Music Theory, and Computer Science. The core of this project is a dynamic system actualized as a fractal that continually adapts to a musical excerpt, piece, or song provided by the user. The program interprets the music through sequences of changing visual imagery, specifically generating Julia set fractals in real-time synchronized with the audio.
 
-This project explores unconventional computing paradigms by mapping musical features to fractal parameters, creating a unique visual and auditory experience that also demonstrates Turing completeness using sound-based computation.
+This project explores unconventional computing paradigms by mapping musical features to fractal parameters, creating a unique visual and auditory experience that also demonstrates Turing completeness using sound-based computation. You can read more in our writeup [here](./SHFLA__Shoegaze_Hierarchical_Fractal_Language_Architecture_.pdf).
 
 ---
 
