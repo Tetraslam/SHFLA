@@ -10,10 +10,13 @@ import requests
 from PIL import Image
 from io import BytesIO
 
+
 def main():
     pygame.init()
     song_name = input("Enter the name of the song to search for: ")
-    resolution_input = input("Enter the resolution as width height (e.g., '1920 1080') or press Enter for default: ")
+    resolution_input = input(
+        "Enter the resolution as width height (e.g., '1920 1080') or press Enter for default: "
+    )
     if resolution_input.strip():
         try:
             width, height = map(int, resolution_input.strip().split())
@@ -28,16 +31,16 @@ def main():
     clock = pygame.time.Clock()
     itunes_api_url = "https://itunes.apple.com/search"
     params = {
-        'term': song_name,
-        'media': 'music',
-        'limit': 1,
+        "term": song_name,
+        "media": "music",
+        "limit": 1,
     }
     response = requests.get(itunes_api_url, params=params)
     if response.status_code == 200:
         data = response.json()
-        if data['resultCount'] > 0:
-            artwork_url = data['results'][0]['artworkUrl100']
-            artwork_url = artwork_url.replace('100x100bb', '1000x1000bb')
+        if data["resultCount"] > 0:
+            artwork_url = data["results"][0]["artworkUrl100"]
+            artwork_url = artwork_url.replace("100x100bb", "1000x1000bb")
             image_response = requests.get(artwork_url)
             if image_response.status_code == 200:
                 image_data = image_response.content
@@ -49,13 +52,15 @@ def main():
     else:
         print("Error fetching data from iTunes API.")
     ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': 'downloaded_audio.%(ext)s',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'wav',
-            'preferredquality': '192',
-        }],
+        "format": "bestaudio/best",
+        "outtmpl": "downloaded_audio.%(ext)s",
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "wav",
+                "preferredquality": "192",
+            }
+        ],
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -66,7 +71,7 @@ def main():
             print(f"Error downloading audio: {e}")
             sys.exit(1)
 
-    audio_file = 'downloaded_audio.wav'
+    audio_file = "downloaded_audio.wav"
 
     if not os.path.exists(audio_file):
         print("Error: Audio file not found after download.")
@@ -136,7 +141,7 @@ def main():
         if current_sample + chunk_samples > total_samples:
             y_chunk = y[:, current_sample:]
         else:
-            y_chunk = y[:, current_sample:current_sample + chunk_samples]
+            y_chunk = y[:, current_sample : current_sample + chunk_samples]
 
         if y_chunk.shape[1] == 0:
             continue  # Skip empty chunks
@@ -146,19 +151,23 @@ def main():
         # Extract features
         # Check for silence
         if np.max(np.abs(y_mono)) < 1e-3:
-            mean_f0 = mean_f0 if 'mean_f0' in locals() else 440  # Default to A4
+            mean_f0 = mean_f0 if "mean_f0" in locals() else 440  # Default to A4
         else:
             # Pitch
             try:
-                f0 = librosa.yin(y_mono, fmin=librosa.note_to_hz('C2'),
-                                 fmax=librosa.note_to_hz('C7'), sr=sr)
+                f0 = librosa.yin(
+                    y_mono,
+                    fmin=librosa.note_to_hz("C2"),
+                    fmax=librosa.note_to_hz("C7"),
+                    sr=sr,
+                )
                 valid_f0 = f0[f0 > 0]
                 if valid_f0.size > 0:
                     mean_f0 = np.mean(valid_f0)
                 else:
-                    mean_f0 = mean_f0 if 'mean_f0' in locals() else 440  # Default to A4
+                    mean_f0 = mean_f0 if "mean_f0" in locals() else 440  # Default to A4
             except Exception as e:
-                mean_f0 = mean_f0 if 'mean_f0' in locals() else 440  # Default to A4
+                mean_f0 = mean_f0 if "mean_f0" in locals() else 440  # Default to A4
 
         # Spectral centroid (brightness)
         spec_centroid = librosa.feature.spectral_centroid(y=y_mono, sr=sr)
@@ -216,7 +225,16 @@ def main():
         color = np.array([r * 255, g * 255, b * 255], dtype=np.float32)
 
         # Generate Julia set image
-        image = julia_set(width, height, max_iter, zoom, smoothed_c_real, smoothed_c_imag, color, rotation_angle)
+        image = julia_set(
+            width,
+            height,
+            max_iter,
+            zoom,
+            smoothed_c_real,
+            smoothed_c_imag,
+            color,
+            rotation_angle,
+        )
 
         # Display image
         surface = pygame.surfarray.make_surface(np.transpose(image, (1, 0, 2)))
@@ -231,6 +249,7 @@ def main():
     # Clean up the downloaded audio file
     if os.path.exists(audio_file):
         os.remove(audio_file)
+
 
 @njit(parallel=True)
 def julia_set(width, height, max_iter, zoom, c_real, c_imag, color, rotation_angle):
@@ -251,7 +270,9 @@ def julia_set(width, height, max_iter, zoom, c_real, c_imag, color, rotation_ang
             iteration = 0
             zx_temp = zx_rot
             zy_temp = zy_rot
-            while (zx_temp * zx_temp + zy_temp * zy_temp < 4.0) and (iteration < max_iter):
+            while (zx_temp * zx_temp + zy_temp * zy_temp < 4.0) and (
+                iteration < max_iter
+            ):
                 xtemp = zx_temp * zx_temp - zy_temp * zy_temp + c_real
                 zy_temp = 2.0 * zx_temp * zy_temp + c_imag
                 zx_temp = xtemp
@@ -281,6 +302,7 @@ def julia_set(width, height, max_iter, zoom, c_real, c_imag, color, rotation_ang
                 image[y, x, 1] = np.uint8(0)
                 image[y, x, 2] = np.uint8(0)
     return image
+
 
 if __name__ == "__main__":
     main()

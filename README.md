@@ -280,8 +280,4 @@ Below is a brief overview of the main components of the code:
 ## Contact
 
 - **Shresht Bhowmick:** [Email](mailto:bhowmick.sh@northeastern.edu) | [GitHub](https://github.com/Tetraslam)
-- **Arnav Dave:**
-
 ---
-
-*Through this project, we aim to propose a new computing paradigm that encompasses multiple senses as part of the computational representation of input and output. We hope you find this exploration as exciting as we do!*
