@@ -11,13 +11,8 @@ from PIL import Image
 from io import BytesIO
 
 def main():
-    # Initialize Pygame
     pygame.init()
-
-    # Get song name from user input
     song_name = input("Enter the name of the song to search for: ")
-
-    # Set resolution
     resolution_input = input("Enter the resolution as width height (e.g., '1920 1080') or press Enter for default: ")
     if resolution_input.strip():
         try:
@@ -26,13 +21,11 @@ def main():
             print("Invalid resolution input. Using default resolution 1920x1080.")
             width, height = 1920, 1080
     else:
-        width, height = 1920, 1080  # Default to Full HD
+        width, height = 1920, 1080
 
     screen = pygame.display.set_mode((width, height))
     pygame.display.set_caption("Dynamic Julia Set Music Visualizer")
     clock = pygame.time.Clock()
-
-    # Fetch album cover art using iTunes Search API
     itunes_api_url = "https://itunes.apple.com/search"
     params = {
         'term': song_name,
@@ -44,23 +37,17 @@ def main():
         data = response.json()
         if data['resultCount'] > 0:
             artwork_url = data['results'][0]['artworkUrl100']
-            # Get higher resolution image
             artwork_url = artwork_url.replace('100x100bb', '1000x1000bb')
-            # Download the image
             image_response = requests.get(artwork_url)
             if image_response.status_code == 200:
                 image_data = image_response.content
                 album_image = Image.open(BytesIO(image_data))
-                # Display the image
-                #album_image.show()
             else:
                 print("Error downloading album artwork.")
         else:
             print("No results found for the song.")
     else:
         print("Error fetching data from iTunes API.")
-
-    # Download and convert audio
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': 'downloaded_audio.%(ext)s',
@@ -79,24 +66,20 @@ def main():
             print(f"Error downloading audio: {e}")
             sys.exit(1)
 
-    # Audio file
     audio_file = 'downloaded_audio.wav'
 
-    # Check if the audio file exists
     if not os.path.exists(audio_file):
         print("Error: Audio file not found after download.")
         sys.exit(1)
 
-    # Load audio file
     try:
         y, sr = librosa.load(audio_file, sr=None, mono=False)
     except Exception as e:
         print(f"Error loading audio file: {e}")
         sys.exit(1)
     if y.ndim == 1:
-        y = y[np.newaxis, :]  # Convert to 2D array with one channel
+        y = y[np.newaxis, :]
 
-    # Load audio for playback
     pygame.mixer.init(frequency=sr)
     try:
         pygame.mixer.music.load(audio_file)
@@ -104,7 +87,6 @@ def main():
         print(f"Error loading audio for playback: {e}")
         sys.exit(1)
 
-    # Start playing the audio
     pygame.mixer.music.play()
 
     # Audio parameters
@@ -116,7 +98,7 @@ def main():
 
     # Fractal parameters
     zoom = 1.0
-    zoom_factor = 1.01
+    zoom_factor = 1.0
     max_iter = 256
 
     # Smooth parameter transitions
@@ -127,7 +109,7 @@ def main():
 
     # Rotation parameters
     rotation_angle = 0.0
-    rotation_speed = 0.001  # Adjust for desired rotation speed
+    rotation_speed = 0.001
 
     # Previous c values for transitions
     target_c_real = smoothed_c_real
@@ -140,7 +122,6 @@ def main():
     running = True
 
     while running:
-        # Handle events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -264,7 +245,7 @@ def julia_set(width, height, max_iter, zoom, c_real, c_imag, color, rotation_ang
         zy = np.float32((y - height / 2) * zy_factor)
         for x in range(width):
             zx = np.float32((x - width / 2) * zx_factor)
-            # Apply rotation
+            # apply rotation
             zx_rot = zx * cos_theta - zy * sin_theta
             zy_rot = zx * sin_theta + zy * cos_theta
             iteration = 0
@@ -276,26 +257,26 @@ def julia_set(width, height, max_iter, zoom, c_real, c_imag, color, rotation_ang
                 zx_temp = xtemp
                 iteration += 1
             if iteration < max_iter:
-                # Smooth coloring
+                # smooth coloring
                 log_zn = np.log(zx_temp * zx_temp + zy_temp * zy_temp) / 2
                 nu = np.log(log_zn / np.log(2)) / np.log(2)
                 iteration = iteration + 1 - nu
                 ratio = iteration / max_iter
                 brightness = np.sqrt(ratio)
-                # Compute color
+                # compute color
                 col_r = color[0] * brightness
                 col_g = color[1] * brightness
                 col_b = color[2] * brightness
-                # Clip values manually
+                # clip values
                 col_r = min(255, max(0, col_r))
                 col_g = min(255, max(0, col_g))
                 col_b = min(255, max(0, col_b))
-                # Assign to image
+                # assign to image
                 image[y, x, 0] = np.uint8(col_r)
                 image[y, x, 1] = np.uint8(col_g)
                 image[y, x, 2] = np.uint8(col_b)
             else:
-                # Assign black color
+                # assign black color
                 image[y, x, 0] = np.uint8(0)
                 image[y, x, 1] = np.uint8(0)
                 image[y, x, 2] = np.uint8(0)
