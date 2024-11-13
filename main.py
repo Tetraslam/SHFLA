@@ -9,10 +9,11 @@ from rich import print
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 from rich.prompt import Prompt
-from numba import cuda
+from numba import cuda, njit, prange
 import math
 import warnings
 import contextlib
+from concurrent.futures import ThreadPoolExecutor
 
 # Suppress specific warnings
 warnings.filterwarnings("ignore", category=UserWarning, module='librosa')
@@ -73,6 +74,9 @@ MIN_CENTROID = 10000
 # Brightness adjustment
 BRIGHTNESS_EXPONENT = 0.35    # Exponent for brightness scaling (adjust between 0.5 and 1.0)
 
+# Number of threads for CPU processing
+NUM_THREADS = 4               # Adjust based on your CPU's capabilities
+
 # ===========================
 #        Function Definitions
 # ===========================
@@ -131,22 +135,78 @@ def julia_kernel(width, height, max_iter, zoom, c_real, c_imag, color, rotation_
         image[y, x, 1] = 0
         image[y, x, 2] = 0
 
-def gpu_julia_set(width, height, max_iter, zoom, c_real, c_imag, color, rotation_angle):
-    image_host = np.zeros((height, width, 3), dtype=np.uint8)
-    image_device = cuda.to_device(image_host)
+@njit(parallel=True)
+def julia_cpu_kernel(width, height, max_iter, zoom, c_real, c_imag, color, rotation_angle):
+    image = np.zeros((height, width, 3), dtype=np.uint8)
+    zx_factor = 1.5 / (0.5 * zoom * width)
+    zy_factor = 1.0 / (0.5 * zoom * height)
+    cos_theta = math.cos(rotation_angle)
+    sin_theta = math.sin(rotation_angle)
 
-    threads_per_block = (16, 16)
-    blocks_per_grid_x = (width + threads_per_block[0] - 1) // threads_per_block[0]
-    blocks_per_grid_y = (height + threads_per_block[1] - 1) // threads_per_block[1]
-    blocks_per_grid = (blocks_per_grid_x, blocks_per_grid_y)
+    for y in prange(height):
+        for x in range(width):
+            zx = (x - width / 2) * zx_factor
+            zy = (y - height / 2) * zy_factor
 
-    julia_kernel[blocks_per_grid, threads_per_block](
-        width, height, max_iter, zoom, c_real, c_imag, color, rotation_angle, image_device
-    )
+            # Apply rotation
+            zx_rot = zx * cos_theta - zy * sin_theta
+            zy_rot = zx * sin_theta + zy * cos_theta
 
-    image_device.copy_to_host(image_host)
+            zx_temp = zx_rot
+            zy_temp = zy_rot
+            iteration = 0
 
-    return image_host
+            while (zx_temp * zx_temp + zy_temp * zy_temp < 4.0) and (iteration < max_iter):
+                xtemp = zx_temp * zx_temp - zy_temp * zy_temp + c_real
+                zy_temp = 2.0 * zx_temp * zy_temp + c_imag
+                zx_temp = xtemp
+                iteration += 1
+
+            if iteration < max_iter:
+                # Smooth coloring
+                log_zn = math.log(zx_temp * zx_temp + zy_temp * zy_temp) / 2
+                nu = math.log(log_zn / math.log(2)) / math.log(2)
+                iteration = iteration + 1 - nu
+                ratio = iteration / max_iter
+                brightness = math.pow(ratio, BRIGHTNESS_EXPONENT)
+                # Compute color
+                col_r = color[0] * brightness
+                col_g = color[1] * brightness
+                col_b = color[2] * brightness
+                # Clip values
+                col_r = min(255, max(0, col_r))
+                col_g = min(255, max(0, col_g))
+                col_b = min(255, max(0, col_b))
+                # Assign to image
+                image[y, x, 0] = np.uint8(col_r)
+                image[y, x, 1] = np.uint8(col_g)
+                image[y, x, 2] = np.uint8(col_b)
+            else:
+                # Assign black color
+                image[y, x, 0] = 0
+                image[y, x, 1] = 0
+                image[y, x, 2] = 0
+    return image
+
+def generate_fractal(width, height, max_iter, zoom, c_real, c_imag, color, rotation_angle, use_cuda=True):
+    if use_cuda:
+        image_host = np.zeros((height, width, 3), dtype=np.uint8)
+        image_device = cuda.to_device(image_host)
+
+        threads_per_block = (16, 16)
+        blocks_per_grid_x = (width + threads_per_block[0] - 1) // threads_per_block[0]
+        blocks_per_grid_y = (height + threads_per_block[1] - 1) // threads_per_block[1]
+        blocks_per_grid = (blocks_per_grid_x, blocks_per_grid_y)
+
+        julia_kernel[blocks_per_grid, threads_per_block](
+            width, height, max_iter, zoom, c_real, c_imag, color, rotation_angle, image_device
+        )
+
+        image_device.copy_to_host(image_host)
+        return image_host
+    else:
+        # CPU-based fractal generation
+        return julia_cpu_kernel(width, height, max_iter, zoom, c_real, c_imag, color, rotation_angle)
 
 # ===========================
 #             Main Function
@@ -249,6 +309,13 @@ def main():
     rotation_angle = 0.0
     zoom = ZOOM
 
+    # Detect if CUDA is available
+    use_cuda = cuda.is_available()
+    if use_cuda:
+        console.print("[green]CUDA-compatible GPU detected. Using GPU acceleration.[/green]")
+    else:
+        console.print("[yellow]CUDA-compatible GPU not detected. Falling back to CPU computation with multithreading.[/yellow]")
+
     def process_chunk(chunk_idx):
         nonlocal smoothed_c_real, smoothed_c_imag, smoothed_color_phase, max_iter, rotation_angle
 
@@ -315,7 +382,7 @@ def main():
         r, g, b = colorsys.hsv_to_rgb(smoothed_color_phase, SATURATION, VALUE)
         color = np.array([r * 255, g * 255, b * 255], dtype=np.float32)
 
-        image = gpu_julia_set(
+        image = generate_fractal(
             width,
             height,
             max_iter,
@@ -324,22 +391,44 @@ def main():
             smoothed_c_imag,
             color,
             rotation_angle,
+            use_cuda
         )
 
         images[chunk_idx] = image
 
-    with Progress(
-        SpinnerColumn(),
-        "[progress.description]{task.description}",
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TimeElapsedColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task("[cyan]Processing images...", total=total_chunks)
-        for i in range(total_chunks):
-            process_chunk(i)
-            progress.advance(task)
+    if use_cuda:
+        # GPU processing
+        with Progress(
+            SpinnerColumn(),
+            "[progress.description]{task.description}",
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("[cyan]Processing images with GPU...", total=total_chunks)
+            for i in range(total_chunks):
+                process_chunk(i)
+                progress.advance(task)
+    else:
+        # CPU processing with multithreading
+        console.print("[yellow]Processing images using CPU with multithreading...[/yellow]")
+        with Progress(
+            SpinnerColumn(),
+            "[progress.description]{task.description}",
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("[cyan]Processing images with CPU...", total=total_chunks)
+            with ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
+                futures = []
+                for i in range(total_chunks):
+                    futures.append(executor.submit(process_chunk, i))
+                for future in futures:
+                    future.result()
+                    progress.advance(task)
 
     console.print("[green]Pre-processing complete! Starting visualization...[/green]\n")
 
