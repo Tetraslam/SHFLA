@@ -4,3 +4,4 @@ numpy<=2.1
 pygame==2.6.1
 rich==13.9.4
 yt_dlp==2024.11.4
+ 
