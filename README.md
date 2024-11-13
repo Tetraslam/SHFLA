@@ -5,10 +5,6 @@
 
 ---
 
-<video controls>
-  <source src="demo.mp4" type="video/mp4">
-</video>
-
 ## Introduction
 
 Hey there! I'm thrilled to introduce SHFLA (Shoegaze Hierarchical Fractal Language Architecture). This project blends my passion for music and fractal geometry by transforming any song into dynamic Julia set fractals, creating an immersive audiovisual experience. By mapping elements like pitch and brightness to fractal parameters, SHFLA brings your music to vibrant life. Designed to be Turing-complete, SHFLA was developed for the MIT Media Lab Unconventional Computing Hackathon, where it won first place. Dive in and watch your music inspire stunning mathematical art!
