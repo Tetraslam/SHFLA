@@ -1,7 +1,6 @@
 librosa==0.10.2.post1
 numba==0.60.0
-numpy==2.1.2
-Pillow==11.0.0
+numpy<=2.1
 pygame==2.6.1
-Requests==2.32.3
-yt_dlp==2024.10.22
+rich==13.9.4
+yt_dlp==2024.11.4

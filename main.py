@@ -1,159 +1,273 @@
 import numpy as np
 import pygame
 import librosa
-from numba import njit, prange
 import sys
 import colorsys
 import os
 import yt_dlp
-import requests
-from PIL import Image
-from io import BytesIO
+from rich import print
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
+from rich.prompt import Prompt
+from numba import cuda
+import math
+import warnings
+import contextlib
 
+# Suppress specific warnings
+warnings.filterwarnings("ignore", category=UserWarning, module='librosa')
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message='Trying to estimate tuning from empty frequency set.'
+)
+warnings.filterwarnings("ignore", category=UserWarning, module='numba')
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+try:
+    from numba.core.errors import NumbaPerformanceWarning
+    warnings.filterwarnings("ignore", category=NumbaPerformanceWarning)
+except ImportError:
+    warnings.filterwarnings(
+        "ignore",
+        message='Host array used in CUDA kernel will incur copy overhead'
+    )
+
+# ===========================
+#        Modifiable Variables
+# ===========================
+
+# Default song settings
+DEFAULT_SONG_NAME = 'Only Shallow by My Bloody Valentine'
+DEFAULT_YOUTUBE_LINK = 'https://www.youtube.com/watch?v=FyYMzEplnfU'
+
+# Visualization parameters
+CHUNK_DURATION = 0.1          # Duration of each audio chunk in seconds
+ALPHA = 0.1                   # Smoothing factor for transitions
+MAX_ITER_DEFAULT = 3000       # Default maximum iterations for fractal computation
+FPS = 60                      # Frames per second for the visualization
+ZOOM = 1.0                    # Zoom level for the fractal
+
+# Initial smoothing variables
+SMOOTHED_C_REAL_INIT = -0.4   # Initial real part of complex parameter c
+SMOOTHED_C_IMAG_INIT = 0.6    # Initial imaginary part of complex parameter c
+SMOOTHED_COLOR_PHASE_INIT = 0.0
+
+# Fractal parameter constraints
+C_REAL_MIN = -0.7
+C_REAL_MAX = 0.7
+C_IMAG_MIN = -0.7
+C_IMAG_MAX = 0.7
+
+# Rotation and color speeds
+ROTATION_SPEED = 0.0005
+COLOR_SPEED = 0.001
+
+# HSV color parameters
+SATURATION = 1.0
+VALUE = 1.0
+
+# Spectral centroid minimum to avoid zero values
+MIN_CENTROID = 10000
+
+# Brightness adjustment
+BRIGHTNESS_EXPONENT = 0.35    # Exponent for brightness scaling (adjust between 0.5 and 1.0)
+
+# ===========================
+#        Function Definitions
+# ===========================
+
+@cuda.jit
+def julia_kernel(width, height, max_iter, zoom, c_real, c_imag, color, rotation_angle, image):
+    x, y = cuda.grid(2)
+    if x >= width or y >= height:
+        return
+
+    # Precompute constants
+    zx_factor = 1.5 / (0.5 * zoom * width)
+    zy_factor = 1.0 / (0.5 * zoom * height)
+    cos_theta = math.cos(rotation_angle)
+    sin_theta = math.sin(rotation_angle)
+
+    zx = (x - width / 2) * zx_factor
+    zy = (y - height / 2) * zy_factor
+
+    # Apply rotation
+    zx_rot = zx * cos_theta - zy * sin_theta
+    zy_rot = zx * sin_theta + zy * cos_theta
+
+    zx_temp = zx_rot
+    zy_temp = zy_rot
+    iteration = 0
+
+    while (zx_temp * zx_temp + zy_temp * zy_temp < 4.0) and (iteration < max_iter):
+        xtemp = zx_temp * zx_temp - zy_temp * zy_temp + c_real
+        zy_temp = 2.0 * zx_temp * zy_temp + c_imag
+        zx_temp = xtemp
+        iteration += 1
+
+    if iteration < max_iter:
+        # Smooth coloring
+        log_zn = math.log(zx_temp * zx_temp + zy_temp * zy_temp) / 2
+        nu = math.log(log_zn / math.log(2)) / math.log(2)
+        iteration = iteration + 1 - nu
+        ratio = iteration / max_iter
+        brightness = math.pow(ratio, BRIGHTNESS_EXPONENT)
+        # Compute color
+        col_r = color[0] * brightness
+        col_g = color[1] * brightness
+        col_b = color[2] * brightness
+        # Clip values
+        col_r = min(255, max(0, col_r))
+        col_g = min(255, max(0, col_g))
+        col_b = min(255, max(0, col_b))
+        # Assign to image
+        image[y, x, 0] = np.uint8(col_r)
+        image[y, x, 1] = np.uint8(col_g)
+        image[y, x, 2] = np.uint8(col_b)
+    else:
+        # Assign black color
+        image[y, x, 0] = 0
+        image[y, x, 1] = 0
+        image[y, x, 2] = 0
+
+def gpu_julia_set(width, height, max_iter, zoom, c_real, c_imag, color, rotation_angle):
+    image_host = np.zeros((height, width, 3), dtype=np.uint8)
+    image_device = cuda.to_device(image_host)
+
+    threads_per_block = (16, 16)
+    blocks_per_grid_x = (width + threads_per_block[0] - 1) // threads_per_block[0]
+    blocks_per_grid_y = (height + threads_per_block[1] - 1) // threads_per_block[1]
+    blocks_per_grid = (blocks_per_grid_x, blocks_per_grid_y)
+
+    julia_kernel[blocks_per_grid, threads_per_block](
+        width, height, max_iter, zoom, c_real, c_imag, color, rotation_angle, image_device
+    )
+
+    image_device.copy_to_host(image_host)
+
+    return image_host
+
+# ===========================
+#             Main Function
+# ===========================
 
 def main():
-    pygame.init()
-    song_name = input("Enter the name of the song to search for: ")
-    resolution_input = input(
-        "Enter the resolution as width height (e.g., '1920 1080') or press Enter for default: "
+    console = Console()
+    with contextlib.redirect_stdout(open(os.devnull, 'w')), contextlib.redirect_stderr(open(os.devnull, 'w')):
+        pygame.init()
+
+    console.rule("[bold magenta]Shoegaze Hierarchical Fractal Language Architecture[/bold magenta]")
+    console.print(
+        "[green]Press Enter to use the default song or enter a song name or YouTube link.[/green]\n"
+    )
+    song_input = Prompt.ask(
+        f"[bold cyan]Enter song name or YouTube link[/bold cyan]", default=DEFAULT_YOUTUBE_LINK
+    )
+
+    resolution_input = Prompt.ask(
+        "[bold cyan]Enter the resolution as width height (e.g., '1920 1080') or press Enter for default[/bold cyan]",
+        default=""
     )
     if resolution_input.strip():
         try:
             width, height = map(int, resolution_input.strip().split())
         except ValueError:
-            print("Invalid resolution input. Using default resolution 1920x1080.")
+            console.print("[red]Invalid resolution input. Using default resolution 1920x1080.[/red]")
             width, height = 1920, 1080
     else:
         width, height = 1920, 1080
 
-    screen = pygame.display.set_mode((width, height))
-    pygame.display.set_caption("Dynamic Julia Set Music Visualizer")
+    with contextlib.redirect_stdout(open(os.devnull, 'w')), contextlib.redirect_stderr(open(os.devnull, 'w')):
+        screen = pygame.display.set_mode((width, height))
+    pygame.display.set_caption("Shoegaze Hierarchical Fractal Language Architecture")
     clock = pygame.time.Clock()
-    itunes_api_url = "https://itunes.apple.com/search"
-    params = {
-        "term": song_name,
-        "media": "music",
-        "limit": 1,
-    }
-    response = requests.get(itunes_api_url, params=params)
-    if response.status_code == 200:
-        data = response.json()
-        if data["resultCount"] > 0:
-            artwork_url = data["results"][0]["artworkUrl100"]
-            artwork_url = artwork_url.replace("100x100bb", "1000x1000bb")
-            image_response = requests.get(artwork_url)
-            if image_response.status_code == 200:
-                image_data = image_response.content
-                album_image = Image.open(BytesIO(image_data))
-            else:
-                print("Error downloading album artwork.")
-        else:
-            print("No results found for the song.")
-    else:
-        print("Error fetching data from iTunes API.")
+
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": "downloaded_audio.%(ext)s",
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "wav",
                 "preferredquality": "192",
+                "nopostoverwrites": False,
             }
         ],
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
-            print("Downloading and processing audio...")
-            ydl.download([f'ytsearch1:"{song_name}"'])
+            console.print("[yellow]Downloading and processing audio...[/yellow]")
+            if song_input.startswith('http'):
+                youtube_url = song_input
+            else:
+                youtube_url = f'ytsearch1:{song_input}'
+            ydl.download([youtube_url])
         except Exception as e:
-            print(f"Error downloading audio: {e}")
+            console.print(f"[red]Error downloading audio: {e}[/red]")
             sys.exit(1)
 
     audio_file = "downloaded_audio.wav"
 
     if not os.path.exists(audio_file):
-        print("Error: Audio file not found after download.")
+        console.print("[red]Error: Audio file not found after download.[/red]")
         sys.exit(1)
 
     try:
         y, sr = librosa.load(audio_file, sr=None, mono=False)
     except Exception as e:
-        print(f"Error loading audio file: {e}")
+        console.print(f"[red]Error loading audio file: {e}[/red]")
         sys.exit(1)
     if y.ndim == 1:
         y = y[np.newaxis, :]
 
-    pygame.mixer.init(frequency=sr)
+    with contextlib.redirect_stdout(open(os.devnull, 'w')), contextlib.redirect_stderr(open(os.devnull, 'w')):
+        pygame.mixer.init(frequency=sr)
     try:
         pygame.mixer.music.load(audio_file)
     except Exception as e:
-        print(f"Error loading audio for playback: {e}")
+        console.print(f"[red]Error loading audio for playback: {e}[/red]")
         sys.exit(1)
 
-    pygame.mixer.music.play()
-
-    # Audio parameters
     duration = librosa.get_duration(y=y, sr=sr)
-    chunk_duration = 0.1  # seconds
-    chunk_samples = int(chunk_duration * sr)
+    chunk_samples = int(CHUNK_DURATION * sr)
     total_samples = y.shape[1]
-    current_sample = 0
+    total_chunks = int(np.ceil(total_samples / chunk_samples))
 
-    # Fractal parameters
-    zoom = 1.0
-    zoom_factor = 1.0
-    max_iter = 256
+    console.print("[yellow]Pre-processing images for visualization...[/yellow]")
+    images = [None] * total_chunks
 
-    # Smooth parameter transitions
-    alpha = 0.05  # Smoothing factor for gradual transitions
-    smoothed_c_real = -0.8
-    smoothed_c_imag = 0.156
-    smoothed_color_phase = 0.0
-
-    # Rotation parameters
+    alpha = ALPHA
+    smoothed_c_real = SMOOTHED_C_REAL_INIT
+    smoothed_c_imag = SMOOTHED_C_IMAG_INIT
+    smoothed_color_phase = SMOOTHED_COLOR_PHASE_INIT
+    max_iter = MAX_ITER_DEFAULT
     rotation_angle = 0.0
-    rotation_speed = 0.001
+    zoom = ZOOM
 
-    # Previous c values for transitions
-    target_c_real = smoothed_c_real
-    target_c_imag = smoothed_c_imag
+    def process_chunk(chunk_idx):
+        nonlocal smoothed_c_real, smoothed_c_imag, smoothed_color_phase, max_iter, rotation_angle
 
-    # For smooth color transitions
-    color_phase = 0.0
-    color_speed = 0.002
-
-    running = True
-
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-
-        # Calculate current position in audio
-        current_pos = pygame.mixer.music.get_pos()  # in milliseconds
-        if current_pos == -1:
-            # Playback has finished
-            running = False
-            continue
-        current_sample = int((current_pos / 1000.0) * sr)
+        current_sample = chunk_idx * chunk_samples
         if current_sample + chunk_samples > total_samples:
             y_chunk = y[:, current_sample:]
         else:
-            y_chunk = y[:, current_sample : current_sample + chunk_samples]
+            y_chunk = y[:, current_sample:current_sample + chunk_samples]
 
         if y_chunk.shape[1] == 0:
-            continue  # Skip empty chunks
+            return
 
         y_mono = np.mean(y_chunk, axis=0)
+        min_centroid = MIN_CENTROID
 
-        # Extract features
-        # Check for silence
         if np.max(np.abs(y_mono)) < 1e-3:
-            mean_f0 = mean_f0 if "mean_f0" in locals() else 440  # Default to A4
+            mean_f0 = 440
+            mean_centroid = min_centroid
         else:
-            # Pitch
             try:
                 f0 = librosa.yin(
                     y_mono,
@@ -162,70 +276,46 @@ def main():
                     sr=sr,
                 )
                 valid_f0 = f0[f0 > 0]
-                if valid_f0.size > 0:
-                    mean_f0 = np.mean(valid_f0)
-                else:
-                    mean_f0 = mean_f0 if "mean_f0" in locals() else 440  # Default to A4
-            except Exception as e:
-                mean_f0 = mean_f0 if "mean_f0" in locals() else 440  # Default to A4
+                mean_f0 = np.mean(valid_f0) if valid_f0.size > 0 else 440
+            except Exception:
+                mean_f0 = 440
 
-        # Spectral centroid (brightness)
-        spec_centroid = librosa.feature.spectral_centroid(y=y_mono, sr=sr)
-        mean_centroid = np.mean(spec_centroid)
+            spec_centroid = librosa.feature.spectral_centroid(y=y_mono, sr=sr)
+            mean_centroid = np.mean(spec_centroid)
+            mean_centroid = max(mean_centroid, min_centroid)
 
-        # Chroma (key/pitch)
         chroma = librosa.feature.chroma_stft(y=y_mono, sr=sr)
         mean_chroma = np.mean(chroma, axis=1)
 
-        # Map features to Julia set parameters
-
-        # Complex parameter c for Julia set
         angle = ((mean_f0 - 65) / (1000 - 65)) * 2 * np.pi
         radius = 0.7885
-        new_c_real = radius * np.cos(angle)
-        new_c_imag = radius * np.sin(angle)
+        target_c_real = radius * np.cos(angle)
+        target_c_imag = radius * np.sin(angle)
 
-        # Update target c values
-        target_c_real = new_c_real
-        target_c_imag = new_c_imag
+        target_c_real = np.clip(target_c_real, C_REAL_MIN, C_REAL_MAX)
+        target_c_imag = np.clip(target_c_imag, C_IMAG_MIN, C_IMAG_MAX)
 
-        # Apply smoothing to c parameters for transitions
         smoothed_c_real = alpha * target_c_real + (1 - alpha) * smoothed_c_real
         smoothed_c_imag = alpha * target_c_imag + (1 - alpha) * smoothed_c_imag
 
-        # Adjust max_iter based on spectral centroid
-        target_max_iter = int(128 + (mean_centroid / (sr / 2)) * 512)
-        target_max_iter = np.clip(target_max_iter, 128, 1024)
-        # Smooth max_iter
+        centroid_normalized = (mean_centroid - min_centroid) / (sr / 2 - min_centroid)
+        centroid_normalized = np.clip(centroid_normalized, 0, 1)
+        target_max_iter = int(500 + (math.exp(centroid_normalized) - 1) * 500)
+        target_max_iter = np.clip(target_max_iter, 500, 1000)
         max_iter = int(alpha * target_max_iter + (1 - alpha) * max_iter)
 
-        # Adjust zoom based on spectral centroid
-        target_zoom_factor = 1.0 + (mean_centroid / (sr / 2)) * 0.01
-        zoom_factor = alpha * target_zoom_factor + (1 - alpha) * zoom_factor
-        zoom *= zoom_factor
-
-        # Adjust rotation angle
-        rotation_angle += rotation_speed
+        rotation_angle += ROTATION_SPEED
         rotation_angle %= 2 * np.pi
 
-        # Adjust color phase for smooth color transitions
-        color_phase = (color_phase + color_speed) % 1.0
-
-        # Map chroma to hue
+        color_phase = (smoothed_color_phase + COLOR_SPEED) % 1.0
         dominant_chroma = np.argmax(mean_chroma)
         target_hue = (dominant_chroma / 12.0 + color_phase) % 1.0
-
-        # Smooth hue
         smoothed_color_phase = alpha * target_hue + (1 - alpha) * smoothed_color_phase
 
-        saturation = 1.0
-        value = 1.0
-
-        r, g, b = colorsys.hsv_to_rgb(smoothed_color_phase, saturation, value)
+        r, g, b = colorsys.hsv_to_rgb(smoothed_color_phase, SATURATION, VALUE)
         color = np.array([r * 255, g * 255, b * 255], dtype=np.float32)
 
-        # Generate Julia set image
-        image = julia_set(
+        image = gpu_julia_set(
             width,
             height,
             max_iter,
@@ -236,73 +326,55 @@ def main():
             rotation_angle,
         )
 
-        # Display image
-        surface = pygame.surfarray.make_surface(np.transpose(image, (1, 0, 2)))
-        screen.blit(surface, (0, 0))
-        pygame.display.flip()
+        images[chunk_idx] = image
 
-        # Control frame rate
-        clock.tick(30)
+    with Progress(
+        SpinnerColumn(),
+        "[progress.description]{task.description}",
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("[cyan]Processing images...", total=total_chunks)
+        for i in range(total_chunks):
+            process_chunk(i)
+            progress.advance(task)
+
+    console.print("[green]Pre-processing complete! Starting visualization...[/green]\n")
+
+    pygame.mixer.music.play()
+    running = True
+    start_time = pygame.time.get_ticks()
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        current_time = pygame.time.get_ticks() - start_time
+        chunk_idx = int((current_time / 1000.0) / CHUNK_DURATION)
+
+        if chunk_idx >= total_chunks:
+            running = False
+            continue
+
+        image = images[chunk_idx]
+        if image is not None:
+            surface = pygame.surfarray.make_surface(np.transpose(image, (1, 0, 2)))
+            screen.blit(surface, (0, 0))
+            pygame.display.flip()
+
+        clock.tick(FPS)
 
     pygame.quit()
 
-    # Clean up the downloaded audio file
     if os.path.exists(audio_file):
         os.remove(audio_file)
 
-
-@njit(parallel=True)
-def julia_set(width, height, max_iter, zoom, c_real, c_imag, color, rotation_angle):
-    image = np.zeros((height, width, 3), dtype=np.uint8)
-    zx_factor = np.float32(1.5 / (0.5 * zoom * width))
-    zy_factor = np.float32(1.0 / (0.5 * zoom * height))
-    c_real = np.float32(c_real)
-    c_imag = np.float32(c_imag)
-    cos_theta = np.cos(rotation_angle)
-    sin_theta = np.sin(rotation_angle)
-    for y in prange(height):
-        zy = np.float32((y - height / 2) * zy_factor)
-        for x in range(width):
-            zx = np.float32((x - width / 2) * zx_factor)
-            # apply rotation
-            zx_rot = zx * cos_theta - zy * sin_theta
-            zy_rot = zx * sin_theta + zy * cos_theta
-            iteration = 0
-            zx_temp = zx_rot
-            zy_temp = zy_rot
-            while (zx_temp * zx_temp + zy_temp * zy_temp < 4.0) and (
-                iteration < max_iter
-            ):
-                xtemp = zx_temp * zx_temp - zy_temp * zy_temp + c_real
-                zy_temp = 2.0 * zx_temp * zy_temp + c_imag
-                zx_temp = xtemp
-                iteration += 1
-            if iteration < max_iter:
-                # smooth coloring
-                log_zn = np.log(zx_temp * zx_temp + zy_temp * zy_temp) / 2
-                nu = np.log(log_zn / np.log(2)) / np.log(2)
-                iteration = iteration + 1 - nu
-                ratio = iteration / max_iter
-                brightness = np.sqrt(ratio)
-                # compute color
-                col_r = color[0] * brightness
-                col_g = color[1] * brightness
-                col_b = color[2] * brightness
-                # clip values
-                col_r = min(255, max(0, col_r))
-                col_g = min(255, max(0, col_g))
-                col_b = min(255, max(0, col_b))
-                # assign to image
-                image[y, x, 0] = np.uint8(col_r)
-                image[y, x, 1] = np.uint8(col_g)
-                image[y, x, 2] = np.uint8(col_b)
-            else:
-                # assign black color
-                image[y, x, 0] = np.uint8(0)
-                image[y, x, 1] = np.uint8(0)
-                image[y, x, 2] = np.uint8(0)
-    return image
-
+# ===========================
+#              Entry Point
+# ===========================
 
 if __name__ == "__main__":
     main()

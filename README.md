@@ -1,80 +1,48 @@
 # SHFLA (Shoegaze Hierarchical Fractal Language Architecture)
 
-**Authors:** Shresht Bhowmick, Arnav Dave  
-**Date:** October 2024
+**Author:** Shresht Bhowmick  
+**Date:** November 2024
 
 ---
 
-## Table of Contents
-
-- [SHFLA (Shoegaze Hierarchical Fractal Language Architecture)](#shfla-shoegaze-hierarchical-fractal-language-architecture)
-  - [Table of Contents](#table-of-contents)
-  - [Introduction](#introduction)
-  - [Features](#features)
-  - [How It Works](#how-it-works)
-  - [Installation](#installation)
-    - [Prerequisites](#prerequisites)
-    - [Required Python Packages](#required-python-packages)
-    - [Steps](#steps)
-  - [Usage](#usage)
-  - [Requirements](#requirements)
-  - [Examples](#examples)
-    - [Visualization Screenshots](#visualization-screenshots)
-      - [Brightness Mapping](#brightness-mapping)
-      - [Contrast Mapping](#contrast-mapping)
-      - [Edge Smoothness and Complexity](#edge-smoothness-and-complexity)
-  - [Contributing](#contributing)
-  - [License](#license)
-  - [Acknowledgments](#acknowledgments)
-  - [Code Overview](#code-overview)
-  - [Contact](#contact)
-
----
+![Demo](./demo.mp4)
 
 ## Introduction
 
-**SHFLA (Shoegaze Hierarchical Fractal Language Architecture)** is an interdisciplinary project that integrates Cognitive Musicology, Linguistics, Music Theory, and Computer Science. The core of this project is a dynamic system actualized as a fractal that continually adapts to a musical excerpt, piece, or song provided by the user. The program interprets the music through sequences of changing visual imagery, specifically generating Julia set fractals in real-time synchronized with the audio.
-
-This project explores unconventional computing paradigms by mapping musical features to fractal parameters, creating a unique visual and auditory experience that also demonstrates Turing completeness using sound-based computation. You can read more in our writeup [here](./SHFLA__Shoegaze_Hierarchical_Fractal_Language_Architecture_.pdf).
+Hey there! I'm thrilled to introduce SHFLA (Shoegaze Hierarchical Fractal Language Architecture). This project blends my passion for music and fractal geometry by transforming any song into dynamic Julia set fractals, creating an immersive audiovisual experience. By mapping elements like pitch and brightness to fractal parameters, SHFLA brings your music to vibrant life. Designed to be Turing-complete, SHFLA was developed for the MIT Media Lab Unconventional Computing Hackathon, where it won first place. Dive in and watch your music inspire stunning mathematical art!
 
 ---
 
 ## Features
 
-- **Real-Time Music Visualization:** Generates dynamic Julia set fractals synchronized with any song input by the user.
-- **Feature Mapping:**
-  - **Brightness:** Corresponds to the spectral centroid (perceived brightness) of the music.
-  - **Contrast:** Linked to the complexity of the Fourier transform of the audio chunk.
-  - **Color:** Maps the musical key (pitch) to the RGB color palette.
-  - **Edge Smoothness and Complexity:** Represents consonance and dissonance in the music.
-  - **Sphericality:** Relates to the resonance and spectral characteristics of the audio.
-  - **Asymmetry:** Reflects the panning (left-right balance) of the music.
-- **Interactive Experience:** Users can input any song name, and the program fetches the audio and album art automatically.
-- **Turing Completeness Exploration:** Demonstrates the potential for Turing-complete computation using audio input and fractal generation.
+- **Real-Time Music Visualization**: Generates dynamic Julia set fractals synchronized with the input music.
+- **Feature Mapping**:
+  - **Brightness**: Mapped to the spectral centroid (perceived brightness) of the audio.
+  - **Color**: Derived from the musical key using chroma features.
+  - **Fractal Complexity**: Adjusted based on the spectral centroid, influencing the intricacy of the fractal patterns.
+- **Interactive Input**: Users can input any song name or YouTube link.
+- **High Performance**: Utilizes GPU acceleration with Numba and CUDA for smooth visualization.
 
 ---
 
 ## How It Works
 
-1. **Audio Input:**
-   - The user inputs the name of a song.
-   - The program downloads the audio using YouTube as a source.
-   - Loads the audio for both processing and playback.
+1. **Audio Input**:
+   - The user inputs a song name or YouTube link.
+   - The program downloads the audio using `yt-dlp`.
 
-2. **Feature Extraction:**
-   - **Pitch (Mean Fundamental Frequency):** Determines the complex parameter `c` for the Julia set.
-   - **Spectral Centroid:** Influences the zoom factor and maximum iterations in the fractal generation.
-   - **Chroma (Pitch Class Profile):** Maps to the hue in the HSV color space for coloring the fractal.
-   - **Panning Information:** Used for asymmetry.
+2. **Feature Extraction**:
+   - **Pitch (Fundamental Frequency)**: Determines the complex parameter `c` for the Julia set.
+   - **Spectral Centroid**: Influences fractal parameters like `max_iter` (complexity).
+   - **Chroma (Pitch Class Profile)**: Maps to hue for coloring the fractal.
 
-3. **Fractal Generation:**
-   - Generates a Julia set fractal for each chunk of audio data.
-   - Parameters like `c`, zoom, rotation, and color are updated in real-time based on the extracted features.
-   - Utilizes Numba's JIT compilation for performance optimization in fractal computation.
+3. **Fractal Generation**:
+   - Generates Julia set fractals using GPU acceleration with Numba and CUDA.
+   - Parameters are updated in real-time based on extracted audio features.
 
-4. **Visualization:**
-   - Displays the fractal images using Pygame.
-   - Synchronizes the visual changes with the music playback.
+4. **Visualization**:
+   - Displays fractal images using Pygame.
+   - Synchronizes visuals with audio playback.
 
 ---
 
@@ -84,6 +52,8 @@ This project explores unconventional computing paradigms by mapping musical feat
 
 - **Python 3.9 or higher**
 - **pip** package manager
+- **ffmpeg** installed and added to system PATH
+  - **Windows Users**: Download `ffmpeg` from [ffmpeg.org](https://ffmpeg.org/download.html#build-windows). After installation, add the `bin` folder to your system PATH. Setting the `--ffmpeg-location` flag may not work; ensure `ffmpeg` is accessible via PATH.
 
 ### Required Python Packages
 
@@ -91,44 +61,40 @@ This project explores unconventional computing paradigms by mapping musical feat
 - `pygame`
 - `librosa`
 - `numba`
-- `pillow`
 - `yt-dlp`
-- `requests`
+- `rich`
 
-### Steps
+### Installation Steps
 
-1. **Clone the Repository:**
+1. **Clone the Repository**:
 
    ```bash
    git clone https://github.com/Tetraslam/SHFLA.git
    cd SHFLA
    ```
 
-2. **Install the Required Packages:**
+2. **Install the Required Packages**:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-   Alternatively, you can install the packages manually:
+   If `requirements.txt` is not available, install packages manually:
 
    ```bash
-   pip install numpy pygame librosa numba pillow yt-dlp requests
+   pip install numpy pygame librosa numba yt-dlp rich
    ```
 
-3. **Ensure FFMPEG is Installed:**
+3. **Install ffmpeg**:
 
-   The program requires `ffmpeg` for audio processing.
-
-   - **Windows:** Download from [ffmpeg.org](https://ffmpeg.org/download.html#build-windows) and add to your PATH.
-   - **macOS:** Install via Homebrew:
-
+   - **Windows**:
+     - Download from [ffmpeg.org](https://ffmpeg.org/download.html#build-windows).
+     - Extract the files and add the `bin` folder to your system PATH.
+   - **macOS**:
      ```bash
      brew install ffmpeg
      ```
-
-   - **Linux:** Install via package manager:
-
+   - **Linux**:
      ```bash
      sudo apt-get install ffmpeg
      ```
@@ -137,48 +103,37 @@ This project explores unconventional computing paradigms by mapping musical feat
 
 ## Usage
 
-1. **Run the Program:**
+1. **Run the Program**:
 
    ```bash
    python main.py
    ```
 
-2. **Input Song Name:**
+2. **Enter Song Input**:
 
-   When prompted, enter the name of the song you wish to visualize.
-
-   ```
-   Enter the name of the song to search for: hades in the dead of winter by my dead girlfriend
-   ```
-
-3. **Set Resolution (Optional):**
-
-   You can specify the window resolution or press Enter to use the default (1920x1080).
+   When prompted, enter a song name or YouTube link:
 
    ```
-   Enter the resolution as width height (e.g., '1920 1080' without quotes) or press Enter for default:
+   Enter song name or YouTube link [default is 'https://www.youtube.com/watch?v=FyYMzEplnfU']:
    ```
 
-4. **Enjoy the Visualization:**
+3. **Set Resolution (Optional)**:
 
-   The program will download the audio, process it, and display the dynamic Julia set fractal synchronized with the music.
+   You can specify the window resolution or press Enter to use the default (1920x1080):
 
----
+   ```
+   Enter the resolution as width height (e.g., '1920 1080') or press Enter for default:
+   ```
 
-## Requirements
+4. **Enjoy the Visualization**:
 
-- **Operating System:** Windows, macOS, or Linux
-- **Python Version:** 3.9 or higher
-- **Internet Connection:** Required for downloading audio and album art
-- **Hardware:** A machine capable of running real-time audio and graphics processing
+   The program will process the audio and display the fractal visualization synchronized with the music.
 
 ---
 
 ## Examples
 
 ### Visualization Screenshots
-
-Here are some examples of the fractal visualizations generated by SHFLA:
 
 #### Brightness Mapping
 
@@ -200,24 +155,36 @@ Here are some examples of the fractal visualizations generated by SHFLA:
 
 ---
 
+## Requirements
+
+- **Operating System**: Windows, macOS, or Linux
+- **Python Version**: 3.9 or higher
+- **Internet Connection**: Required for downloading audio
+- **Hardware**:
+  - **CUDA-Compatible GPU**: Recommended for optimal performance.
+  - **Sufficient RAM**: For processing audio and graphics.
+
+---
+
 ## Contributing
 
-We welcome contributions from the community! If you'd like to contribute to SHFLA, please follow these steps:
+Contributions are welcome! Please follow these steps:
 
 1. **Fork the Repository**
-2. **Create a Feature Branch**
+
+2. **Create a Feature Branch**:
 
    ```bash
    git checkout -b feature/your-feature-name
    ```
 
-3. **Commit Your Changes**
+3. **Commit Your Changes**:
 
    ```bash
    git commit -am 'Add a new feature'
    ```
 
-4. **Push to the Branch**
+4. **Push to the Branch**:
 
    ```bash
    git push origin feature/your-feature-name
@@ -229,55 +196,22 @@ We welcome contributions from the community! If you'd like to contribute to SHFL
 
 ## License
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License**.
 
 ---
 
 ## Acknowledgments
 
-- **Cognitive Musicology and Music Theory:** For inspiring the integration of musical features into computational models.
-- **Fractal Geometry:** Benoît Mandelbrot's work on fractals laid the foundation for this project.
-- **Unconventional Computing Paradigms:** Exploring new ways to represent computation through audio and visual mediums.
-- **Python Community:** For the development of libraries like NumPy, Librosa, Pygame, and Numba, which made this project possible.
-
----
-
-**References:**
-
-- Adamatzky, A. (Ed.). (2016). *Advances in Unconventional Computing: Volume 1: Theory*. Springer.
-- Devaney, R. L. (1992). *A First Course in Chaotic Dynamical Systems: Theory and Experiment*. Westview Press.
-- Hsu, K. J., & Hsu, A. (1990). Fractal geometry of music. *Proceedings of the National Academy of Sciences*, 87(3), 938-941.
-- Leman, M. (1995). *Music and Schema Theory: Cognitive Foundations of Systematic Musicology*. Springer.
-- MacLennan, B. J. (2003). Transcending Turing computability. *Minds and Machines*, 13(1), 3-22.
-- Mandelbrot, B. B. (1983). *The Fractal Geometry of Nature*. W. H. Freeman.
-- Purwins, H., Herrera, P., Grachten, M., Hazan, A., Marxer, R., & Serra, X. (2008). Computational models of music perception and cognition I: The perceptual and cognitive processing chain. *Physics of Life Reviews*, 5(3), 151-168.
-- Voss, R. F., & Clarke, J. (1975). "1/f noise" in music and speech. *Nature*, 258(5533), 317-318.
-
----
-
-## Code Overview
-
-Below is a brief overview of the main components of the code:
-
-- **Imports Necessary Libraries:** Including `numpy`, `pygame`, `librosa`, `numba`, and others.
-- **Main Functionality:**
-  - **User Input:** Prompts for the song name and desired resolution.
-  - **Album Art Retrieval:** Fetches album cover art using the iTunes Search API.
-  - **Audio Download and Processing:** Downloads the audio using `yt-dlp` and processes it with `librosa`.
-  - **Audio Playback:** Uses `pygame.mixer` to play the audio.
-  - **Feature Extraction:** Extracts features like pitch, spectral centroid, and chroma.
-  - **Parameter Mapping:** Maps extracted features to fractal parameters such as `c`, zoom, rotation, and color.
-  - **Fractal Generation:** Generates the Julia set fractal using a Numba-optimized function.
-  - **Visualization Loop:** Continuously updates and displays the fractal in sync with the music.
-
-- **Julia Set Function (`julia_set`):**
-  - Uses Numba's `@njit` decorator for just-in-time compilation.
-  - Computes the fractal for each pixel, applying smooth coloring techniques.
-  - Incorporates rotation and zoom transformations.
+- **Fractal Geometry**: Inspired by the work of Benoît Mandelbrot.
+- **Python Community**: For the development of essential libraries.
+- **Numba and CUDA**: For enabling high-performance computations.
 
 ---
 
 ## Contact
 
-- **Shresht Bhowmick:** [Email](mailto:bhowmick.sh@northeastern.edu) | [GitHub](https://github.com/Tetraslam)
+- **Shresht Bhowmick**: [Email](mailto:bhowmick.sh@northeastern.edu) | [GitHub](https://github.com/Tetraslam)
+
 ---
+
+Feel free to reach out for any questions or collaboration opportunities!
