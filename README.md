@@ -90,8 +90,10 @@ The video above has a quick example run using My Bloody Valentine's *Only Shallo
 3. **Install ffmpeg**:
 
    - **Windows**:
-     - Download from [ffmpeg.org](https://ffmpeg.org/download.html#build-windows).
-     - Extract the files and add the `bin` folder to your system PATH.
+     ```batch
+     winget install --id=Gyan.FFmpeg  -e
+     ```
+     or, alternatively, download `ffmpeg` from [ffmpeg.org](https://ffmpeg.org/download.html#build-windows). After installation, add the `bin` folder to your system PATH. Setting the `--ffmpeg-location` flag may not work; ensure `ffmpeg` is accessible via PATH.
    - **macOS**:
      ```bash
      brew install ffmpeg
