@@ -5,46 +5,45 @@
 
 ---
 
-https://github.com/user-attachments/assets/abfe95df-1d38-440c-b86b-50a7cdbcebc9
+![SHFLA in Action](https://github.com/user-attachments/assets/abfe95df-1d38-440c-b86b-50a7cdbcebc9)
 
 ## Introduction
 
-Hey there! I'm thrilled to introduce SHFLA (Shoegaze Hierarchical Fractal Language Architecture). This project blends my passion for music and fractal geometry by transforming any song into dynamic Julia set fractals, creating an immersive audiovisual experience. By mapping elements like pitch and brightness to fractal parameters, SHFLA brings your music to vibrant life. Designed to be Turing-complete, SHFLA was developed for the MIT Media Lab Unconventional Computing Hackathon, where it won first place. Dive in and watch your music inspire stunning mathematical art!
+SHFLA (Shoegaze Hierarchical Fractal Language Architecture) takes my obsessions with music and fractal geometry and mashes them into a wild audiovisual playground. It’s a system that maps musical elements to dynamic Julia set fractals, producing visuals that adapt to the mood and energy of the song. Designed to be Turing-complete, SHFLA made its debut at the MIT Media Lab Unconventional Computing Hackathon and snagged first place for turning audio into stunning real-time fractal art.
 
-The video above has a quick example run using My Bloody Valentine's *Only Shallow*. The video is heavily compressed, so you can expect much better clarity when running locally!
+The example video above demonstrates SHFLA with My Bloody Valentine’s *Only Shallow* (heavily compressed, but you get the vibe). Locally, it’s sharper, punchier, and absolutely mesmerizing.
 
 ---
 
 ## Features
 
-- **Real-Time Music Visualization**: Generates dynamic Julia set fractals synchronized with the input music.
-- **Feature Mapping**:
-  - **Brightness**: Mapped to the spectral centroid (perceived brightness) of the audio.
-  - **Color**: Derived from the musical key using chroma features.
-  - **Fractal Complexity**: Adjusted based on the spectral centroid, influencing the intricacy of the fractal patterns.
-- **Interactive Input**: Users can input any song name or YouTube link.
-- **High Performance**: Utilizes GPU acceleration with Numba and CUDA for smooth visualization.
+- **Real-Time Visuals**: Synchronizes Julia set fractals with the audio playback.
+- **Dynamic Parameter Mapping**:
+  - **Brightness**: Mapped to the spectral centroid (perceived brightness).
+  - **Color**: Directly tied to the musical key via chroma analysis.
+  - **Complexity**: Influenced by the spectral centroid, scaling fractal intricacy.
+- **Interactive Inputs**: Accepts song names or YouTube links.
+- **Optimized Performance**: GPU acceleration via Numba and CUDA ensures buttery-smooth visuals.
 
 ---
 
 ## How It Works
 
-1. **Audio Input**:
-   - The user inputs a song name or YouTube link.
-   - The program downloads the audio using `yt-dlp`.
+### 1. Audio Input
+- Enter a song name or a YouTube link.
+- Audio is fetched using `yt-dlp`.
 
-2. **Feature Extraction**:
-   - **Pitch (Fundamental Frequency)**: Determines the complex parameter `c` for the Julia set.
-   - **Spectral Centroid**: Influences fractal parameters like `max_iter` (complexity).
-   - **Chroma (Pitch Class Profile)**: Maps to hue for coloring the fractal.
+### 2. Feature Extraction
+- **Pitch (Fundamental Frequency)**: Sets the complex parameter `c` for the Julia set.
+- **Spectral Centroid**: Adjusts fractal complexity, e.g., `max_iter`.
+- **Chroma Features**: Maps pitch classes to the fractal’s color palette.
 
-3. **Fractal Generation**:
-   - Generates Julia set fractals using GPU acceleration with Numba and CUDA.
-   - Parameters are updated in real-time based on extracted audio features.
+### 3. Fractal Generation
+- GPU-accelerated Julia set rendering in real-time.
+- Dynamic parameter updates ensure seamless synchronization with music.
 
-4. **Visualization**:
-   - Displays fractal images using Pygame.
-   - Synchronizes visuals with audio playback.
+### 4. Visualization
+- Pygame handles rendering and real-time interaction.
 
 ---
 
@@ -52,170 +51,109 @@ The video above has a quick example run using My Bloody Valentine's *Only Shallo
 
 ### Prerequisites
 
-- **Python 3.9 or higher**
-- **pip** package manager
-- **ffmpeg** installed and added to system PATH
-  - **Windows Users**: Download `ffmpeg` from [ffmpeg.org](https://ffmpeg.org/download.html#build-windows). After installation, add the `bin` folder to your system PATH. Setting the `--ffmpeg-location` flag may not work; ensure `ffmpeg` is accessible via PATH.
+- **Python 3.9+**
+- **pip**
+- **ffmpeg** in system PATH
 
-### Required Python Packages
+### Python Dependencies
 
-- `numpy`
-- `pygame`
-- `librosa`
-- `numba`
-- `yt-dlp`
-- `rich`
+Install via `requirements.txt`:
 
-### Installation Steps
+```bash
+git clone https://github.com/Tetraslam/SHFLA.git
+cd SHFLA
+pip install -r requirements.txt
+```
 
-1. **Clone the Repository**:
+Or install manually:
 
-   ```bash
-   git clone https://github.com/Tetraslam/SHFLA.git
-   cd SHFLA
-   ```
+```bash
+pip install numpy pygame librosa numba yt-dlp rich
+```
 
-2. **Install the Required Packages**:
+### ffmpeg Installation
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+- **Windows**: [ffmpeg.org](https://ffmpeg.org/download.html#build-windows)
+- **macOS**: `brew install ffmpeg`
+- **Linux**: `sudo apt-get install ffmpeg`
 
-   If `requirements.txt` is not available, install packages manually:
-
-   ```bash
-   pip install numpy pygame librosa numba yt-dlp rich
-   ```
-
-3. **Install ffmpeg**:
-
-   - **Windows**:
-     ```batch
-     winget install --id=Gyan.FFmpeg  -e
-     ```
-     or, alternatively, download `ffmpeg` from [ffmpeg.org](https://ffmpeg.org/download.html#build-windows). After installation, add the `bin` folder to your system PATH. Setting the `--ffmpeg-location` flag may not work; ensure `ffmpeg` is accessible via PATH.
-   - **macOS**:
-     ```bash
-     brew install ffmpeg
-     ```
-   - **Linux**:
-     ```bash
-     sudo apt-get install ffmpeg
-     ```
+Ensure ffmpeg is added to your PATH.
 
 ---
 
 ## Usage
 
-1. **Run the Program**:
-
+1. **Run SHFLA**:
    ```bash
    python main.py
    ```
 
-2. **Enter Song Input**:
+2. **Provide Input**:
+   Enter a song name or YouTube link when prompted.
 
-   When prompted, enter a song name or YouTube link:
+3. **Adjust Resolution (Optional)**:
+   Specify a resolution or press Enter for default (1920x1080).
 
-   ```
-   Enter song name or YouTube link [default is 'https://www.youtube.com/watch?v=FyYMzEplnfU']:
-   ```
-
-3. **Set Resolution (Optional)**:
-
-   You can specify the window resolution or press Enter to use the default (1920x1080):
-
-   ```
-   Enter the resolution as width height (e.g., '1920 1080') or press Enter for default:
-   ```
-
-4. **Enjoy the Visualization**:
-
-   The program will process the audio and display the fractal visualization synchronized with the music.
+4. **Enjoy the Show**:
+   Watch as SHFLA transforms music into fractals in real time.
 
 ---
 
 ## Examples
 
-### Visualization Screenshots
-
-#### Brightness Mapping
-
+### Brightness Mapping
 ![Brightness Mapping](images/brightness.png)
+*Fractal changes driven by audio brightness.*
 
-*Figure 1: Fractal visualization showing brightness corresponding to the spectral centroid.*
-
-#### Contrast Mapping
-
-![Contrast Mapping](images/fourier.png)
-
-*Figure 2: Fractal visualization showing contrast related to Fourier complexity.*
-
-#### Edge Smoothness and Complexity
-
-![Edge Smoothness](images/edge_smoothness.png)
-
-*Figure 3: Fractal edges representing consonance and dissonance.*
+### Complexity Dynamics
+![Fourier Complexity](images/fourier.png)
+*Fractal detail scaling with spectral richness.*
 
 ---
 
-## Requirements
+## System Requirements
 
-- **Operating System**: Windows, macOS, or Linux
-- **Python Version**: 3.9 or higher
-- **Internet Connection**: Required for downloading audio
+- **OS**: Windows/macOS/Linux
+- **Python**: 3.9+
 - **Hardware**:
-  - **CUDA-Compatible GPU**: Recommended for optimal performance.
-  - **Sufficient RAM**: For processing audio and graphics.
+  - CUDA-enabled GPU (recommended)
+  - 8GB+ RAM
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please follow these steps:
+Pull requests are welcome!
 
-1. **Fork the Repository**
-
+1. **Fork the Repo**
 2. **Create a Feature Branch**:
-
    ```bash
-   git checkout -b feature/your-feature-name
+   git checkout -b feature/new-feature
    ```
-
-3. **Commit Your Changes**:
-
+3. **Push Changes**:
    ```bash
-   git commit -am 'Add a new feature'
+   git push origin feature/new-feature
    ```
-
-4. **Push to the Branch**:
-
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-5. **Open a Pull Request**
+4. **Submit a Pull Request**
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License**.
+**MIT License**. Feel free to modify and distribute.
 
 ---
 
 ## Acknowledgments
 
-- **Fractal Geometry**: Inspired by the work of Benoît Mandelbrot.
-- **Python Community**: For the development of essential libraries.
-- **Numba and CUDA**: For enabling high-performance computations.
+Special thanks to the Python community and everyone who’s ever stared too long at a fractal. Extra shoutout to Numba, CUDA, and the shoegaze genre for inspiration.
 
 ---
 
 ## Contact
 
-- **Shresht Bhowmick**: [Email](mailto:bhowmick.sh@northeastern.edu) | [GitHub](https://github.com/Tetraslam)
+Questions or ideas? Hit me up:
 
----
-
-Feel free to reach out for any questions or collaboration opportunities!
+- **Email**: [bhowmick.sh@northeastern.edu](mailto:bhowmick.sh@northeastern.edu)
+- **GitHub**: [Tetraslam](https://github.com/Tetraslam)
+- **Website**: [tetraslam.world](https://tetraslam.world)
