@@ -109,6 +109,9 @@ Ensure ffmpeg is added to your PATH.
 ![Fourier Complexity](images/fourier.png)
 *Fractal detail scaling with spectral richness.*
 
+### Edge Smoothness
+![Edge Smoothness](images/edge_smoothness.png)
+*Rough around the edges*
 ---
 
 ## System Requirements
