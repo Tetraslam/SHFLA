@@ -5,7 +5,7 @@
 
 ---
 
-![SHFLA in Action](https://github.com/user-attachments/assets/abfe95df-1d38-440c-b86b-50a7cdbcebc9)
+https://github.com/user-attachments/assets/abfe95df-1d38-440c-b86b-50a7cdbcebc9
 
 ## Introduction
 
