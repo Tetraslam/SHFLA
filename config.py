@@ -10,10 +10,10 @@ DEFAULT_YOUTUBE_LINK = 'https://www.youtube.com/watch?v=FyYMzEplnfU'
 
 # Visualization parameters
 CHUNK_DURATION = 0.05          # Duration of each audio chunk in seconds (20Hz update rate)
-ALPHA = 0.1                   # Smoothing factor for transitions
+ALPHA = 0.9                   # Smoothing factor for transitions
 MAX_ITER_DEFAULT = 1000       # Reduced maximum iterations for better performance
 FPS = 60                      # Reduced target FPS for better stability
-ZOOM = 1.0                    # Zoom level for the fractal
+ZOOM = 0.8                    # Zoom level for the fractal
 
 # Initial smoothing variables
 SMOOTHED_C_REAL_INIT = -0.4   # Initial real part of complex parameter c
@@ -38,7 +38,7 @@ VALUE = 1.0
 MIN_CENTROID = 10000
 
 # Brightness adjustment
-BRIGHTNESS_EXPONENT = 0.15    # Exponent for brightness scaling
+BRIGHTNESS_EXPONENT = 0.25    # Exponent for brightness scaling
 
 # Number of threads for CPU processing
 NUM_THREADS = 4               # Adjust based on CPU capabilities
