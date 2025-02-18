@@ -5,8 +5,8 @@ import shutil
 import pygame
 
 # Default song settings
-DEFAULT_SONG_NAME = 'Only Shallow by My Bloody Valentine'
-DEFAULT_YOUTUBE_LINK = 'https://www.youtube.com/watch?v=FyYMzEplnfU'
+DEFAULT_SONG_NAME = 'Geometry Dash - Orochi Soundtrack'
+DEFAULT_YOUTUBE_LINK = 'https://www.youtube.com/watch?v=nSh88w0KssQ'
 
 # Visualization parameters
 CHUNK_DURATION = 0.05          # Duration of each audio chunk in seconds (20Hz update rate)
