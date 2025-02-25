@@ -5,6 +5,6 @@ You can send these as queries directly.
 - Kadenz Yui Sakakibara
 - Subahibi OST: Yoru no Himawari
 - Dies Irae - Animation OST: Rozen Vamp
-- 
-- 
+- Alan Walker - Spectre
+- Chinese rapping dog (no i will not elaborate)
 - 
