@@ -9,6 +9,7 @@ import { explain, mimeFor, pickAudio, type YtFormat, youtubeId } from './_youtub
 export const config = { maxDuration: 60 }
 
 const MAX_SECONDS = 30 * 60
+const CLIENTS = ['', 'tv_simply']
 const MAX_BYTES = 80 * 1024 * 1024
 const ENV = { ...process.env, HOME: '/tmp', XDG_CACHE_HOME: '/tmp/yt-dlp-cache', TMPDIR: '/tmp' }
 /** yt-dlp needs a javascript runtime for youtube's player challenges; node is already here */
@@ -97,22 +98,37 @@ export async function GET(request: Request): Promise<Response> {
     const id = youtubeId(new URL(request.url).searchParams.get('url'))
     if (!id) throw new HttpError(400, "that isn't a youtube video link")
     const bin = await binary()
-    const json = await run(
-      bin,
-      [
-        '-J',
-        '--no-playlist',
-        '--no-warnings',
-        '--use-extractors',
-        'youtube',
-        ...JS,
-        '--cache-dir',
-        '/tmp/yt-dlp-cache',
-        '--',
-        `https://www.youtube.com/watch?v=${id}`,
-      ],
-      request.signal,
-    )
+    // youtube asks datacenter addresses to sign in; some player clients are asked less often,
+    // so when the default is refused, try those before giving up
+    let json = ''
+    let lastErr: unknown = null
+    for (const client of CLIENTS) {
+      try {
+        json = await run(
+          bin,
+          [
+            '-J',
+            '--no-playlist',
+            '--no-warnings',
+            '--use-extractors',
+            'youtube',
+            ...JS,
+            ...(client ? ['--extractor-args', `youtube:player_client=${client}`] : []),
+            '--cache-dir',
+            '/tmp/yt-dlp-cache',
+            '--',
+            `https://www.youtube.com/watch?v=${id}`,
+          ],
+          request.signal,
+        )
+        console.log('yt-dlp extracted', id, 'with', client || 'default clients')
+        break
+      } catch (e) {
+        lastErr = e
+        if (!(e instanceof HttpError) || e.status !== 503) throw e
+      }
+    }
+    if (!json) throw lastErr
     const info = JSON.parse(json) as Info
     if (info.is_live) throw new HttpError(422, 'live streams have no end to hold on to. pick a regular video')
     if ((info.duration ?? 0) > MAX_SECONDS) throw new HttpError(413, 'that video is longer than 30 minutes')
@@ -144,20 +160,30 @@ export async function GET(request: Request): Promise<Response> {
     // wait for the first bytes, so a failure before the audio starts is still a proper error
     await new Promise<void>((resolve, reject) => {
       const onData = () => {
+        clearTimeout(timer)
         child.stdout.pause()
         child.off('close', onClose)
         resolve()
       }
       const onClose = (code: number | null) => {
+        clearTimeout(timer)
         child.stdout.off('readable', onData)
         void unlink(infoPath).catch(() => {})
         console.error('yt-dlp download failed early', code, errTail.slice(-1500))
         const { status, message } = explain(errTail)
         reject(new HttpError(status, message))
       }
+      const timer = setTimeout(() => {
+        child.stdout.off('readable', onData)
+        child.off('close', onClose)
+        cleanup()
+        reject(new HttpError(504, 'youtube was too slow to send the audio'))
+      }, 20_000)
       child.stdout.once('readable', onData)
       child.once('close', onClose)
     })
+    // nothing gets to outlive the function
+    setTimeout(cleanup, 55_000).unref()
 
     let sent = 0
     const body = new ReadableStream<Uint8Array>({

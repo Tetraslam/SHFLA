@@ -5,7 +5,7 @@ import { FeatureExtractor, IdleBreath } from './features'
 import type { AudioFrame } from './frame'
 import { Voice } from './voice'
 
-export type SourceKind = 'demo' | 'file' | 'link' | 'mic'
+export type SourceKind = 'demo' | 'file' | 'link' | 'mic' | 'tab'
 
 export interface SourceState {
   kind: SourceKind
@@ -15,7 +15,24 @@ export interface SourceState {
   duration: number | null
 }
 
-export class SourceError extends Error {}
+export class SourceError extends Error {
+  /** a youtube link the server couldn't fetch; the ui offers to play it in a tab and listen to that */
+  youtube?: string
+  constructor(message: string, youtube?: string) {
+    super(message)
+    this.youtube = youtube
+  }
+}
+
+/** tab audio capture: chrome and edge on desktop */
+export function canListenToTab(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices?.getDisplayMedia &&
+    !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) &&
+    /Chrome\/|Edg\//.test(navigator.userAgent)
+  )
+}
 
 const FFT = 4096
 
@@ -198,14 +215,23 @@ export class AudioEngine {
     // resume inside the click, before the long wait, so playback is still allowed afterwards
     await this.ensure().resume()
     onStatus?.('asking youtube for the audio')
+    const tabHint = canListenToTab()
+      ? 'youtube turned our server away. play it in a tab and let shfla listen to that tab instead'
+      : 'youtube turned our server away. try chrome or edge on a computer, which can listen to a tab'
     let res: Response
+    const timeout = new AbortController()
+    const timer = setTimeout(() => timeout.abort(), 30_000)
     try {
-      res = await fetch(`/api/yt?url=${encodeURIComponent(href)}`)
+      res = await fetch(`/api/yt?url=${encodeURIComponent(href)}`, { signal: timeout.signal })
     } catch {
-      throw new SourceError("couldn't reach the server")
+      throw new SourceError(tabHint, href)
+    } finally {
+      clearTimeout(timer)
     }
     if (!res.ok || !res.body) {
       const body = (await res.json().catch(() => null)) as { error?: string } | null
+      // refusals that a tab can get around; a private or missing video can't be helped
+      if (res.status === 503 || res.status >= 500) throw new SourceError(tabHint, href)
       throw new SourceError(body?.error ?? "couldn't get the audio out of that video")
     }
     const title = decodeURIComponent(res.headers.get('x-shfla-title') ?? 'youtube')
@@ -226,7 +252,7 @@ export class AudioEngine {
         )
       }
     } catch {
-      throw new SourceError('the download broke off partway. try again')
+      throw new SourceError(tabHint, href)
     }
     if (!got) throw new SourceError('youtube sent back nothing')
     const blob = new Blob(parts, { type: res.headers.get('content-type') ?? 'audio/mp4' })
@@ -237,6 +263,53 @@ export class AudioEngine {
       URL.revokeObjectURL(url)
       throw new SourceError("the browser couldn't decode the audio youtube sent")
     }
+  }
+
+  /** listen to another browser tab: it keeps playing there, we only analyse it */
+  async playTab() {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      throw new SourceError("this browser can't share a tab's sound. chrome or edge on a computer can")
+    }
+    const ctx = this.ensure()
+    await ctx.resume()
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        preferCurrentTab: false,
+        selfBrowserSurface: 'exclude',
+        surfaceSwitching: 'include',
+        systemAudio: 'include',
+        monitorTypeSurfaces: 'exclude',
+      } as DisplayMediaStreamOptions)
+    } catch {
+      throw new SourceError('no tab was shared')
+    }
+    const video = stream.getVideoTracks()[0]
+    const label = video?.label ?? ''
+    for (const t of stream.getVideoTracks()) t.stop()
+    const audio = stream.getAudioTracks()
+    if (!audio.length) {
+      throw new SourceError("that share had no sound. pick a tab, and leave 'also share tab audio' switched on")
+    }
+    this.teardown()
+    const live = new MediaStream(audio)
+    const node = ctx.createMediaStreamSource(live)
+    // the tab plays itself; we only listen, or the song would double
+    node.connect(this.analyser as AnalyserNode)
+    this.mic = live
+    this.micNode = node
+    audio[0].addEventListener('ended', () => {
+      if (this.mic === live) this.stop()
+    })
+    const title = label
+      .replace(/^web-contents-media-stream:\/\/.*$/, '')
+      .replace(/\s*-\s*YouTube$/, '')
+      .trim()
+    this.source = { kind: 'tab', title: title || 'another tab', playing: true, duration: null }
+    this.applyVoice()
+    this.emit()
   }
 
   async playMic() {
@@ -273,7 +346,7 @@ export class AudioEngine {
     if (s.kind === 'demo') {
       if (s.playing) this.demo?.stop()
       else this.demo?.start()
-    } else if (s.kind === 'mic') {
+    } else if (s.kind === 'mic' || s.kind === 'tab') {
       if (s.playing) await this.ctx.suspend()
       else await this.ctx.resume()
     } else if (this.el) {

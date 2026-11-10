@@ -1,7 +1,7 @@
 import { parseAsFloat, parseAsString, throttle, useQueryStates } from 'nuqs'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { AudioEngine, SourceError, type SourceKind, type SourceState } from '@/audio/engine'
+import { AudioEngine, canListenToTab, SourceError, type SourceKind, type SourceState } from '@/audio/engine'
 import { LEVELS } from '@/audio/frame'
 import { Intro } from '@/components/intro'
 import { type MeterRefs, Transport } from '@/components/transport'
@@ -52,7 +52,7 @@ export function App() {
   const [source, setSource] = useState<SourceState | null>(null)
   const [busy, setBusy] = useState<SourceKind | null>(null)
   const [status, setStatus] = useState<string | null>(null)
-  const [sourceError, setSourceError] = useState<string | null>(null)
+  const [sourceError, setSourceError] = useState<{ message: string; youtube?: string } | null>(null)
   const [dragging, setDragging] = useState(false)
   const [speed, setSpeed] = useState(1)
   const [zoom, setZoom] = useState(1)
@@ -217,8 +217,11 @@ export function App() {
     try {
       await fn()
     } catch (e) {
-      const msg = e instanceof SourceError ? e.message : 'something went wrong starting that'
-      setSourceError(msg)
+      setSourceError(
+        e instanceof SourceError
+          ? { message: e.message, youtube: e.youtube }
+          : { message: 'something went wrong starting that' },
+      )
       if (!(e instanceof SourceError)) console.error(e)
     } finally {
       setBusy(null)
@@ -229,6 +232,8 @@ export function App() {
   const a = audio.current
   const playDemo = useCallback(() => run('demo', () => a.playDemo()), [run, a])
   const playMic = useCallback(() => run('mic', () => a.playMic()), [run, a])
+  const playTab = useCallback(() => run('tab', () => a.playTab()), [run, a])
+  const [tabOk] = useState(canListenToTab)
   const playLink = useCallback((url: string) => run('link', () => a.playLink(url, (s) => setStatus(s))), [run, a])
   const playFile = useCallback((file: File) => run('file', () => a.playFile(file)), [run, a])
   const pickFile = useCallback(() => fileInput.current?.click(), [])
@@ -261,6 +266,7 @@ export function App() {
         if (arg === 'demo') playDemo()
         else if (arg === 'file') pickFile()
         else if (arg === 'mic') playMic()
+        else if (arg === 'tab') playTab()
         else if (arg === 'link') {
           a.stop()
           setChrome(true)
@@ -278,7 +284,7 @@ export function App() {
       else if (verb === 'fullscreen') fullscreen()
       else if (verb === 'share') void share()
     },
-    [a, choosePreset, fullscreen, pickFile, playDemo, playMic, q.voice, setQ, share, toggleChrome],
+    [a, choosePreset, fullscreen, pickFile, playDemo, playMic, playTab, q.voice, setQ, share, toggleChrome],
   )
 
   // ---- keys
@@ -370,6 +376,7 @@ export function App() {
             onFile={pickFile}
             onLink={playLink}
             onMic={playMic}
+            onTab={tabOk ? playTab : undefined}
           />
         )}
 
@@ -438,6 +445,7 @@ export function App() {
             playing={!!source?.playing}
             hasSource={!!source}
             voiceOn={q.voice > 0}
+            canTab={tabOk}
           />
         </Suspense>
         <Toaster position="top-center" />

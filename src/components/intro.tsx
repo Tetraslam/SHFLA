@@ -6,11 +6,13 @@ interface Props {
   initialLinkOpen?: boolean
   busy: SourceKind | null
   status: string | null
-  error: string | null
+  error: { message: string; youtube?: string } | null
   onDemo: () => void
   onFile: () => void
   onLink: (url: string) => void
   onMic: () => void
+  /** only where the browser can share a tab's sound */
+  onTab?: () => void
 }
 
 const choice =
@@ -26,7 +28,7 @@ function Underline({ active }: { active?: boolean }) {
 }
 
 /** The first screen: the fractal is already running behind this; the title pulls into focus over it. */
-export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, onFile, onLink, onMic }: Props) {
+export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, onFile, onLink, onMic, onTab }: Props) {
   const [linkOpen, setLinkOpen] = useState(initialLinkOpen)
   const [link, setLink] = useState('')
   const input = useRef<HTMLInputElement>(null)
@@ -87,6 +89,12 @@ export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, on
             {busy === 'mic' ? 'listening…' : 'use the mic'}
             <Underline />
           </button>
+          {onTab && (
+            <button type="button" className={choice} onClick={onTab} disabled={busy !== null}>
+              {busy === 'tab' ? 'pick a tab…' : 'listen to a tab'}
+              <Underline />
+            </button>
+          )}
         </div>
 
         {/* the link field grows in place; nothing below it moves because nothing is below it */}
@@ -132,13 +140,33 @@ export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, on
 
         <p aria-live="polite" className="text-glow mt-5 min-h-[1.5em] text-[14px]">
           {error ? (
-            <span className="text-err">{error}</span>
+            <span className="text-err">{error.message}</span>
           ) : status ? (
             <span className="text-ink-muted">{status}…</span>
           ) : (
             <span className="text-ink-faint">or drop a song anywhere</span>
           )}
         </p>
+
+        {/* youtube refused the server: play it in a tab, then listen to that tab */}
+        {error?.youtube && onTab && (
+          <ol className="focus-in text-glow mt-1 flex flex-wrap items-baseline gap-x-6 gap-y-2 text-[16px]">
+            <li>
+              <span className="mr-2 font-mono text-[11px] text-ink-faint">1</span>
+              <a href={error.youtube} target="_blank" rel="noopener noreferrer" className={choice}>
+                open the video in a new tab
+                <Underline />
+              </a>
+            </li>
+            <li>
+              <span className="mr-2 font-mono text-[11px] text-ink-faint">2</span>
+              <button type="button" className={choice} onClick={onTab} disabled={busy !== null}>
+                listen to that tab
+                <Underline />
+              </button>
+            </li>
+          </ol>
+        )}
       </div>
     </div>
   )

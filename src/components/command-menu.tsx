@@ -19,6 +19,7 @@ interface Props {
   playing: boolean
   hasSource: boolean
   voiceOn: boolean
+  canTab: boolean
 }
 
 export function CommandMenu(p: Props) {
@@ -41,6 +42,7 @@ export function CommandMenu(p: Props) {
           <CommandItem onSelect={go('source:file')}>a song from this computer</CommandItem>
           <CommandItem onSelect={go('source:link')}>a link</CommandItem>
           <CommandItem onSelect={go('source:mic')}>the microphone</CommandItem>
+          {p.canTab && <CommandItem onSelect={go('source:tab')}>another tab (youtube, spotify, anything)</CommandItem>}
           {p.hasSource && (
             <CommandItem onSelect={go('toggle')}>
               {p.playing ? 'pause' : 'play'}

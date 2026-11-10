@@ -100,7 +100,7 @@ export function Transport(p: Props) {
           </div>
           <div className="mt-0.5 flex items-center gap-2 font-mono text-[11px] leading-tight text-ink-muted tabular-nums">
             {s && <span>{s.kind === 'mic' ? 'live' : s.kind}</span>}
-            {s && s.kind !== 'mic' && (
+            {s && s.kind !== 'mic' && s.kind !== 'tab' && (
               <span
                 ref={(el) => {
                   p.meters.current.time = el
