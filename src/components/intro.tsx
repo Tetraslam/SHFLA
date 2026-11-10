@@ -1,6 +1,6 @@
 import { ArrowRightIcon } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
-import type { SourceKind } from '@/audio/engine'
+import type { SourceKind, SystemSource } from '@/audio/engine'
 
 interface Props {
   initialLinkOpen?: boolean
@@ -13,6 +13,10 @@ interface Props {
   onMic: () => void
   /** only where the browser can share a tab's sound */
   onTab?: () => void
+  /** firefox and friends: listen to an output monitor */
+  onSystem?: () => void
+  systemChoices?: SystemSource[] | null
+  onChooseSystem?: (s: SystemSource) => void
 }
 
 const choice =
@@ -28,7 +32,20 @@ function Underline({ active }: { active?: boolean }) {
 }
 
 /** The first screen: the fractal is already running behind this; the title pulls into focus over it. */
-export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, onFile, onLink, onMic, onTab }: Props) {
+export function Intro({
+  initialLinkOpen = false,
+  busy,
+  status,
+  error,
+  onDemo,
+  onFile,
+  onLink,
+  onMic,
+  onTab,
+  onSystem,
+  systemChoices,
+  onChooseSystem,
+}: Props) {
   const [linkOpen, setLinkOpen] = useState(initialLinkOpen)
   const [link, setLink] = useState('')
   const input = useRef<HTMLInputElement>(null)
@@ -95,6 +112,12 @@ export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, on
               <Underline />
             </button>
           )}
+          {onSystem && (
+            <button type="button" className={choice} onClick={onSystem} disabled={busy !== null}>
+              {busy === 'system' ? 'listening…' : 'listen to this computer'}
+              <Underline />
+            </button>
+          )}
         </div>
 
         {/* the link field grows in place; nothing below it moves because nothing is below it */}
@@ -148,8 +171,29 @@ export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, on
           )}
         </p>
 
-        {/* youtube refused the server: play it in a tab, then listen to that tab */}
-        {error?.youtube && onTab && (
+        {/* more than one output: say which one the music is coming out of */}
+        {systemChoices && systemChoices.length > 0 && (
+          <div className="focus-in text-glow mt-1 text-[16px]">
+            <p className="mb-2 text-[14px] text-ink-muted">which output is the music coming out of?</p>
+            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+              {systemChoices.map((c) => (
+                <button
+                  type="button"
+                  key={c.id}
+                  className={choice}
+                  onClick={() => onChooseSystem?.(c)}
+                  disabled={busy !== null}
+                >
+                  {c.label}
+                  <Underline />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* youtube refused the server: play it in a tab, then listen to it */}
+        {error?.youtube && (onTab || onSystem) && (
           <ol className="focus-in text-glow mt-1 flex flex-wrap items-baseline gap-x-6 gap-y-2 text-[16px]">
             <li>
               <span className="mr-2 font-mono text-[11px] text-ink-faint">1</span>
@@ -160,8 +204,8 @@ export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, on
             </li>
             <li>
               <span className="mr-2 font-mono text-[11px] text-ink-faint">2</span>
-              <button type="button" className={choice} onClick={onTab} disabled={busy !== null}>
-                listen to that tab
+              <button type="button" className={choice} onClick={onTab ?? onSystem} disabled={busy !== null}>
+                {onTab ? 'listen to that tab' : 'listen to this computer'}
                 <Underline />
               </button>
             </li>

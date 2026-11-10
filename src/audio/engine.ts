@@ -5,7 +5,7 @@ import { FeatureExtractor, IdleBreath } from './features'
 import type { AudioFrame } from './frame'
 import { Voice } from './voice'
 
-export type SourceKind = 'demo' | 'file' | 'link' | 'mic' | 'tab'
+export type SourceKind = 'demo' | 'file' | 'link' | 'mic' | 'tab' | 'system'
 
 export interface SourceState {
   kind: SourceKind
@@ -22,6 +22,22 @@ export class SourceError extends Error {
     super(message)
     this.youtube = youtube
   }
+}
+
+export interface SystemSource {
+  id: string
+  label: string
+}
+
+const RAW = { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+
+/** "monitor of …" inputs: on linux, pipewire and pulseaudio expose each output as something to listen to */
+export function systemLabel(label: string): string {
+  return label
+    .replace(/^monitor of\s*/i, '')
+    .replace(/\.monitor$/i, '')
+    .trim()
+    .toLowerCase()
 }
 
 /** tab audio capture: chrome and edge on desktop */
@@ -217,7 +233,7 @@ export class AudioEngine {
     onStatus?.('asking youtube for the audio')
     const tabHint = canListenToTab()
       ? 'youtube turned our server away. play it in a tab and let shfla listen to that tab instead'
-      : 'youtube turned our server away. try chrome or edge on a computer, which can listen to a tab'
+      : 'youtube turned our server away. play it in a tab and let shfla listen to this computer instead'
     let res: Response
     const timeout = new AbortController()
     const timer = setTimeout(() => timeout.abort(), 30_000)
@@ -312,14 +328,67 @@ export class AudioEngine {
     this.emit()
   }
 
+  /**
+   * The outputs this computer lets us listen to. Asking needs microphone permission first,
+   * because browsers hide device names until then.
+   */
+  async systemSources(): Promise<SystemSource[]> {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new SourceError("this browser can't listen to anything")
+    }
+    await this.ensure().resume()
+    try {
+      const probe = await navigator.mediaDevices.getUserMedia({ audio: RAW })
+      for (const t of probe.getTracks()) t.stop()
+    } catch (e) {
+      const name = e instanceof DOMException ? e.name : ''
+      throw new SourceError(
+        name === 'NotAllowedError'
+          ? 'shfla needs the audio permission to hear this computer. allow it in the address bar'
+          : 'no audio devices found',
+      )
+    }
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    const monitors = devices
+      .filter((d) => d.kind === 'audioinput' && /monitor/i.test(d.label))
+      .map((d) => ({ id: d.deviceId, label: systemLabel(d.label) }))
+    if (!monitors.length) {
+      throw new SourceError(
+        /Linux/.test(navigator.userAgent)
+          ? "couldn't find a monitor device. pipewire or pulseaudio normally provide one per output"
+          : 'this system has no loopback device. blackhole (mac) or vb-cable (windows) adds one, then pick it here',
+      )
+    }
+    return monitors
+  }
+
+  /** listen to one output of this computer: whatever is playing there, from any app or tab */
+  async playSystem(source: SystemSource) {
+    const ctx = this.ensure()
+    await ctx.resume()
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { ...RAW, deviceId: { exact: source.id } } })
+    } catch {
+      throw new SourceError(`couldn't open ${source.label}`)
+    }
+    this.teardown()
+    const node = ctx.createMediaStreamSource(stream)
+    // listened to, never played back: it is already coming out of the speakers
+    node.connect(this.analyser as AnalyserNode)
+    this.mic = stream
+    this.micNode = node
+    this.source = { kind: 'system', title: `this computer · ${source.label}`, playing: true, duration: null }
+    this.applyVoice()
+    this.emit()
+  }
+
   async playMic() {
     const ctx = this.ensure()
     await ctx.resume()
     let stream: MediaStream
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      })
+      stream = await navigator.mediaDevices.getUserMedia({ audio: RAW })
     } catch (e) {
       const name = e instanceof DOMException ? e.name : ''
       throw new SourceError(
@@ -346,7 +415,7 @@ export class AudioEngine {
     if (s.kind === 'demo') {
       if (s.playing) this.demo?.stop()
       else this.demo?.start()
-    } else if (s.kind === 'mic' || s.kind === 'tab') {
+    } else if (s.kind === 'mic' || s.kind === 'tab' || s.kind === 'system') {
       if (s.playing) await this.ctx.suspend()
       else await this.ctx.resume()
     } else if (this.el) {

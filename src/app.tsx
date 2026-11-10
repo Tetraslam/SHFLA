@@ -1,7 +1,14 @@
 import { parseAsFloat, parseAsString, throttle, useQueryStates } from 'nuqs'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { AudioEngine, canListenToTab, SourceError, type SourceKind, type SourceState } from '@/audio/engine'
+import {
+  AudioEngine,
+  canListenToTab,
+  SourceError,
+  type SourceKind,
+  type SourceState,
+  type SystemSource,
+} from '@/audio/engine'
 import { LEVELS } from '@/audio/frame'
 import { Intro } from '@/components/intro'
 import { type MeterRefs, Transport } from '@/components/transport'
@@ -176,7 +183,8 @@ export function App() {
   }, [q.palette, speed, zoom])
 
   useEffect(() => {
-    audio.current?.setVoice(source?.kind === 'mic' ? 0 : q.voice)
+    // the voice would come back in through a mic or a system monitor and feed itself
+    audio.current?.setVoice(source?.kind === 'mic' || source?.kind === 'system' ? 0 : q.voice)
   }, [q.voice, source?.kind])
 
   // ---- url: a preset by name, an edited program by value
@@ -234,6 +242,32 @@ export function App() {
   const playMic = useCallback(() => run('mic', () => a.playMic()), [run, a])
   const playTab = useCallback(() => run('tab', () => a.playTab()), [run, a])
   const [tabOk] = useState(canListenToTab)
+  // firefox (zen, librewolf…) can't share a tab's sound, but it can open an output's monitor like a mic
+  const [systemOk] = useState(
+    () =>
+      !canListenToTab() &&
+      !!navigator.mediaDevices?.getUserMedia &&
+      !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
+  )
+  const [systemChoices, setSystemChoices] = useState<SystemSource[] | null>(null)
+  const playSystem = useCallback(
+    () =>
+      run('system', async () => {
+        setSystemChoices(null)
+        const list = await a.systemSources()
+        if (list.length === 1) await a.playSystem(list[0])
+        else setSystemChoices(list)
+      }),
+    [run, a],
+  )
+  const chooseSystem = useCallback(
+    (c: SystemSource) =>
+      run('system', async () => {
+        setSystemChoices(null)
+        await a.playSystem(c)
+      }),
+    [run, a],
+  )
   const playLink = useCallback((url: string) => run('link', () => a.playLink(url, (s) => setStatus(s))), [run, a])
   const playFile = useCallback((file: File) => run('file', () => a.playFile(file)), [run, a])
   const pickFile = useCallback(() => fileInput.current?.click(), [])
@@ -267,6 +301,7 @@ export function App() {
         else if (arg === 'file') pickFile()
         else if (arg === 'mic') playMic()
         else if (arg === 'tab') playTab()
+        else if (arg === 'system') playSystem()
         else if (arg === 'link') {
           a.stop()
           setChrome(true)
@@ -284,7 +319,7 @@ export function App() {
       else if (verb === 'fullscreen') fullscreen()
       else if (verb === 'share') void share()
     },
-    [a, choosePreset, fullscreen, pickFile, playDemo, playMic, playTab, q.voice, setQ, share, toggleChrome],
+    [a, choosePreset, fullscreen, pickFile, playDemo, playMic, playSystem, playTab, q.voice, setQ, share, toggleChrome],
   )
 
   // ---- keys
@@ -377,6 +412,9 @@ export function App() {
             onLink={playLink}
             onMic={playMic}
             onTab={tabOk ? playTab : undefined}
+            onSystem={systemOk ? playSystem : undefined}
+            systemChoices={systemChoices}
+            onChooseSystem={chooseSystem}
           />
         )}
 
@@ -446,6 +484,7 @@ export function App() {
             hasSource={!!source}
             voiceOn={q.voice > 0}
             canTab={tabOk}
+            canSystem={systemOk}
           />
         </Suspense>
         <Toaster position="top-center" />
