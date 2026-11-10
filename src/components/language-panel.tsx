@@ -49,7 +49,7 @@ export function LanguagePanel(p: Props) {
         <button
           type="button"
           onClick={p.onClose}
-          className="-mr-2 flex size-9 shrink-0 items-center justify-center rounded-full text-ink/70 hover:bg-ink/10 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sodium/60"
+          className="-mr-2 flex size-9 shrink-0 items-center justify-center rounded-full text-ink/70 hover:bg-ink/10 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
           aria-label="close the language"
         >
           <XIcon className="size-4" />
@@ -79,7 +79,7 @@ export function LanguagePanel(p: Props) {
           </>
         ) : (
           <>
-            <span className="size-1.5 shrink-0 rounded-full bg-sodium" />
+            <span className="size-1.5 shrink-0 rounded-full bg-ink/70" />
             <span className="truncate text-ink-muted">running on six scales. edits apply as you type</span>
           </>
         )}
@@ -93,7 +93,7 @@ export function LanguagePanel(p: Props) {
               key={x.id}
               onClick={() => p.onPreset(x.id)}
               title={x.line}
-              className={`font-display text-[22px] leading-tight transition-colors focus-visible:outline-none focus-visible:underline ${x.id === p.presetId ? 'text-ink underline decoration-sodium decoration-1 underline-offset-[6px]' : 'text-ink/50 hover:text-ink'}`}
+              className={`font-display text-[22px] leading-tight transition-colors focus-visible:outline-none focus-visible:underline ${x.id === p.presetId ? 'text-ink underline decoration-ink/60 decoration-1 underline-offset-[6px]' : 'text-ink/50 hover:text-ink'}`}
             >
               {x.name}
             </button>
@@ -105,7 +105,7 @@ export function LanguagePanel(p: Props) {
             type="button"
             onClick={() => setRefOpen((v) => !v)}
             aria-expanded={refOpen}
-            className="-ml-2 flex items-center gap-1.5 rounded-full px-2 py-1 text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sodium/60"
+            className="-ml-2 flex items-center gap-1.5 rounded-full px-2 py-1 text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
           >
             <CaretDownIcon
               className={`size-3.5 transition-transform duration-300 ease-[var(--ease-focus)] ${refOpen ? '' : '-rotate-90'}`}
@@ -116,7 +116,7 @@ export function LanguagePanel(p: Props) {
           <button
             type="button"
             onClick={p.onReseed}
-            className="flex items-center gap-1.5 rounded-full px-2 py-1 text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sodium/60"
+            className="flex items-center gap-1.5 rounded-full px-2 py-1 text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
           >
             <ArrowCounterClockwiseIcon className="size-3.5" /> reseed
             <kbd className="font-mono text-[10px] opacity-60">r</kbd>
@@ -124,7 +124,7 @@ export function LanguagePanel(p: Props) {
           <button
             type="button"
             onClick={p.onShare}
-            className="flex items-center gap-1.5 rounded-full px-2 py-1 text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sodium/60"
+            className="flex items-center gap-1.5 rounded-full px-2 py-1 text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
           >
             <LinkIcon className="size-3.5" /> copy link
           </button>

@@ -60,13 +60,13 @@ const theme = EditorView.theme(
   {
     '&': { backgroundColor: 'transparent', color: 'var(--ink)', fontSize: '13px', height: '100%' },
     '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.65', overflow: 'auto' },
-    '.cm-content': { caretColor: 'var(--sodium)', padding: '12px 0' },
+    '.cm-content': { caretColor: 'var(--ink)', padding: '12px 0' },
     '.cm-line': { padding: '0 20px 0 6px' },
     '&.cm-focused': { outline: 'none' },
-    '.cm-cursor': { borderLeftColor: 'var(--sodium)', borderLeftWidth: '2px' },
+    '.cm-cursor': { borderLeftColor: 'var(--ink)', borderLeftWidth: '2px' },
     '.cm-activeLine': { backgroundColor: 'rgb(243 236 230 / 0.035)' },
     '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-      backgroundColor: 'rgb(255 180 138 / 0.22) !important',
+      backgroundColor: 'rgb(243 236 230 / 0.16) !important',
     },
     '.cm-gutters': { backgroundColor: 'transparent', border: 'none' },
     '.cm-lint-marker': { width: '0.7em', height: '0.7em' },
@@ -84,7 +84,7 @@ const theme = EditorView.theme(
     },
     '.cm-tooltip-autocomplete > ul': { fontFamily: 'var(--font-mono)', fontSize: '12px' },
     '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
-      backgroundColor: 'rgb(255 180 138 / 0.18)',
+      backgroundColor: 'rgb(243 236 230 / 0.12)',
       color: 'var(--ink)',
     },
     '.cm-completionDetail': { color: 'rgb(243 236 230 / 0.5)', fontStyle: 'normal', marginLeft: '0.8em' },

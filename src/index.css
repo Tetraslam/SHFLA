@@ -71,7 +71,7 @@
   --destructive: var(--err);
   --border: rgb(243 236 230 / 0.08);
   --input: rgb(243 236 230 / 0.12);
-  --ring: rgb(255 180 138 / 0.6);
+  --ring: rgb(243 236 230 / 0.5);
   --radius: 0.875rem;
   color-scheme: dark;
 }
@@ -91,7 +91,7 @@
     font-feature-settings: "cv11", "ss01";
   }
   ::selection {
-    background: rgb(255 180 138 / 0.35);
+    background: rgb(243 236 230 / 0.22);
   }
 }
 

@@ -51,7 +51,7 @@ export function CommandMenu(p: Props) {
         <CommandGroup heading="rules">
           {PRESETS.map((x) => (
             <CommandItem key={x.id} value={`rule ${x.name} ${x.line}`} onSelect={go(`preset:${x.id}`)}>
-              <span className={x.id === p.presetId ? 'text-sodium' : ''}>{x.name}</span>
+              <span className={x.id === p.presetId ? 'text-white' : ''}>{x.name}</span>
               <span className="truncate text-ink-muted">{x.line}</span>
             </CommandItem>
           ))}
@@ -59,7 +59,7 @@ export function CommandMenu(p: Props) {
         <CommandGroup heading="palettes">
           {PALETTES.map((x) => (
             <CommandItem key={x.id} value={`palette ${x.name}`} onSelect={go(`palette:${x.id}`)}>
-              <span className={x.id === p.paletteId ? 'text-sodium' : ''}>{x.name}</span>
+              <span className={x.id === p.paletteId ? 'text-white' : ''}>{x.name}</span>
             </CommandItem>
           ))}
         </CommandGroup>

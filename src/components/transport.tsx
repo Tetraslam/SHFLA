@@ -35,7 +35,7 @@ interface Props {
 }
 
 const iconButton =
-  'flex size-9 items-center justify-center rounded-full text-ink/75 transition-colors duration-150 hover:bg-ink/10 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sodium/60 aria-pressed:text-sodium'
+  'flex size-9 items-center justify-center rounded-full text-ink/75 transition-colors duration-150 hover:bg-ink/10 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/50 aria-pressed:bg-ink/10 aria-pressed:text-ink'
 
 function Tip({ label, keys, children }: { label: string; keys?: string; children: React.ReactElement }) {
   return (
@@ -92,8 +92,11 @@ export function Transport(p: Props) {
         </Tip>
 
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[14px] leading-tight text-ink">
-            {s ? s.title : <span className="text-ink-muted">no song yet. it's breathing on its own</span>}
+          <div className="flex items-center gap-2 text-[14px] leading-tight text-ink">
+            {s?.playing && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-sodium" />}
+            <span className="truncate">
+              {s ? s.title : <span className="text-ink-muted">no song yet. it's breathing on its own</span>}
+            </span>
           </div>
           <div className="mt-0.5 flex items-center gap-2 font-mono text-[11px] leading-tight text-ink-muted tabular-nums">
             {s && <span>{s.kind === 'mic' ? 'live' : s.kind}</span>}
@@ -165,7 +168,7 @@ export function Transport(p: Props) {
                         className="group grid flex-1 gap-1.5 text-left focus-visible:outline-none"
                       >
                         <span
-                          className={`h-8 rounded-md ring-offset-2 ring-offset-popover transition-shadow group-focus-visible:ring-2 group-focus-visible:ring-sodium/60 ${active ? 'ring-1 ring-ink/70' : ''}`}
+                          className={`h-8 rounded-md ring-offset-2 ring-offset-popover transition-shadow group-focus-visible:ring-2 group-focus-visible:ring-ink/50 ${active ? 'ring-1 ring-ink/70' : ''}`}
                           style={{ background: `linear-gradient(135deg, ${a}, ${b} 55%, ${c})` }}
                         />
                         <span className={`text-[11px] ${active ? 'text-ink' : 'text-ink-muted'}`}>{pal.name}</span>
