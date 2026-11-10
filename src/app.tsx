@@ -165,10 +165,14 @@ export function App() {
 
   // ---- settings into the engine
   useEffect(() => {
-    const e = engine.current
-    if (!e) return
     const rm = matchMedia('(prefers-reduced-motion: reduce)')
-    e.settings = { palette: paletteById(q.palette), speed, zoom, reducedMotion: rm.matches }
+    const apply = () => {
+      const e = engine.current
+      if (e) e.settings = { palette: paletteById(q.palette), speed, zoom, reducedMotion: rm.matches }
+    }
+    apply()
+    rm.addEventListener('change', apply)
+    return () => rm.removeEventListener('change', apply)
   }, [q.palette, speed, zoom])
 
   useEffect(() => {

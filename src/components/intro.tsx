@@ -106,6 +106,12 @@ export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, on
                 ref={input}
                 value={link}
                 onChange={(e) => setLink(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setLinkOpen(false)
+                    e.currentTarget.blur()
+                  }
+                }}
                 placeholder="https://… a direct link to an mp3, ogg, wav, or m4a"
                 className="h-9 min-w-0 flex-1 bg-transparent text-[15px] text-ink placeholder:text-ink-faint focus:outline-none"
                 aria-label="audio link"
