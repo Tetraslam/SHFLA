@@ -8,8 +8,10 @@ function devApi(): Plugin {
   return {
     name: 'shfla-dev-api',
     configureServer(server) {
-      server.middlewares.use('/api/audio', async (req, res) => {
-        const mod = await server.ssrLoadModule('/api/audio.ts')
+      server.middlewares.use(async (req, res, next) => {
+        const route = req.originalUrl?.match(/^\/api\/(audio|yt)\b/)?.[1]
+        if (!route) return next()
+        const mod = await server.ssrLoadModule(`/api/${route}.ts`)
         const headers = new Headers()
         for (const [k, v] of Object.entries(req.headers)) if (typeof v === 'string') headers.set(k, v)
         const response: Response = await mod.GET(new Request(`http://localhost${req.originalUrl}`, { headers }))
@@ -19,10 +21,15 @@ function devApi(): Plugin {
         })
         if (!response.body) return res.end()
         const reader = response.body.getReader()
-        for (;;) {
-          const { done, value } = await reader.read()
-          if (done) break
-          res.write(value)
+        req.on('close', () => void reader.cancel().catch(() => {}))
+        try {
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            res.write(value)
+          }
+        } catch (e) {
+          console.error('[dev api]', e)
         }
         res.end()
       })

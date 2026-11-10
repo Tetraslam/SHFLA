@@ -10,7 +10,8 @@
     "format": "biome check --write .",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "yt-dlp": "node scripts/fetch-yt-dlp.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

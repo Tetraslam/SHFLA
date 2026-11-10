@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 .vercel
 .env*
+
+# yt-dlp binary, fetched and verified by scripts/fetch-yt-dlp.mjs
+bin/

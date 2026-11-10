@@ -1,4 +1,5 @@
 import type { LevelActivity } from '@/gpu/engine'
+import { isYouTube } from '../../api/_youtube'
 import { createDemoSong, type DemoSong } from './demo'
 import { FeatureExtractor, IdleBreath } from './features'
 import type { AudioFrame } from './frame'
@@ -27,6 +28,7 @@ export class AudioEngine {
   private idle = new IdleBreath()
   private spectrum: Float32Array<ArrayBuffer> | null = null
   private el: HTMLAudioElement | null = null
+  private objectUrl: string | null = null
   private elNode: MediaElementAudioSourceNode | null = null
   private mic: MediaStream | null = null
   private micNode: MediaStreamAudioSourceNode | null = null
@@ -70,6 +72,8 @@ export class AudioEngine {
     for (const t of this.mic?.getTracks() ?? []) t.stop()
     this.mic = null
     this.micNode = null
+    if (this.objectUrl) URL.revokeObjectURL(this.objectUrl)
+    this.objectUrl = null
     this.source = null
   }
 
@@ -93,10 +97,11 @@ export class AudioEngine {
     this.emit()
   }
 
-  private async playElement(src: string, title: string, kind: 'file' | 'link', crossOrigin: boolean) {
+  private async playElement(src: string, title: string, kind: 'file' | 'link', crossOrigin: boolean, owned = false) {
     const ctx = this.ensure()
     await ctx.resume()
     this.teardown()
+    if (owned) this.objectUrl = src
     const el = new Audio()
     if (crossOrigin) el.crossOrigin = 'anonymous'
     el.preload = 'auto'
@@ -150,7 +155,7 @@ export class AudioEngine {
     const url = URL.createObjectURL(file)
     const title = file.name.replace(/\.[a-z0-9]+$/i, '')
     try {
-      await this.playElement(url, title, 'file', false)
+      await this.playElement(url, title, 'file', false, true)
     } catch (e) {
       URL.revokeObjectURL(url)
       throw e instanceof SourceError ? new SourceError(`the browser can't decode "${file.name}"`) : e
@@ -171,6 +176,7 @@ export class AudioEngine {
       /\.[a-z0-9]+$/i,
       '',
     )
+    if (isYouTube(url.href)) return this.playYouTube(url.href, onStatus)
     onStatus?.('reaching the link')
     try {
       await this.playElement(url.href, title, 'link', true)
@@ -182,8 +188,54 @@ export class AudioEngine {
       await this.playElement(`/api/audio?url=${encodeURIComponent(url.href)}`, title, 'link', false)
     } catch {
       throw new SourceError(
-        "couldn't play that link. it has to point straight at an audio file (mp3, ogg, wav, m4a), not a page",
+        "couldn't play that link. it has to be a youtube video or point straight at an audio file (mp3, ogg, wav, m4a)",
       )
+    }
+  }
+
+  /** yt-dlp runs on our server; the audio arrives as one blob, so seeking is free afterwards */
+  private async playYouTube(href: string, onStatus?: (s: string) => void) {
+    // resume inside the click, before the long wait, so playback is still allowed afterwards
+    await this.ensure().resume()
+    onStatus?.('asking youtube for the audio')
+    let res: Response
+    try {
+      res = await fetch(`/api/yt?url=${encodeURIComponent(href)}`)
+    } catch {
+      throw new SourceError("couldn't reach the server")
+    }
+    if (!res.ok || !res.body) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null
+      throw new SourceError(body?.error ?? "couldn't get the audio out of that video")
+    }
+    const title = decodeURIComponent(res.headers.get('x-shfla-title') ?? 'youtube')
+    const total = Number(res.headers.get('content-length') ?? 0)
+    const parts: Uint8Array<ArrayBuffer>[] = []
+    let got = 0
+    const reader = res.body.getReader()
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        parts.push(value)
+        got += value.byteLength
+        onStatus?.(
+          total
+            ? `pulling the audio, ${Math.round((got / total) * 100)}%`
+            : `pulling the audio, ${(got / 1e6).toFixed(1)} mb`,
+        )
+      }
+    } catch {
+      throw new SourceError('the download broke off partway. try again')
+    }
+    if (!got) throw new SourceError('youtube sent back nothing')
+    const blob = new Blob(parts, { type: res.headers.get('content-type') ?? 'audio/mp4' })
+    const url = URL.createObjectURL(blob)
+    try {
+      await this.playElement(url, title, 'link', false, true)
+    } catch {
+      URL.revokeObjectURL(url)
+      throw new SourceError("the browser couldn't decode the audio youtube sent")
     }
   }
 

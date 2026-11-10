@@ -112,7 +112,7 @@ export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, on
                     e.currentTarget.blur()
                   }
                 }}
-                placeholder="https://… a direct link to an mp3, ogg, wav, or m4a"
+                placeholder="a youtube link, or a direct link to an audio file"
                 className="h-9 min-w-0 flex-1 bg-transparent text-[15px] text-ink placeholder:text-ink-faint focus:outline-none"
                 aria-label="audio link"
                 inputMode="url"
