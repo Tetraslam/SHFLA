@@ -25,6 +25,21 @@ export function bandBins(sampleRate: number, fftSize: number): Array<[number, nu
  */
 export function estimateTempo(env: ArrayLike<number>, rate: number): { bpm: number; confidence: number } {
   const n = env.length
+  // smooth first: sharp onsets on a coarse grid lose their peak at non-integer lags
+  const sm = new Float32Array(n)
+  const kern = [1, 4, 6, 4, 1]
+  for (let i = 0; i < n; i++) {
+    let acc = 0
+    let w = 0
+    for (let j = -2; j <= 2; j++) {
+      const v = env[i + j]
+      if (v === undefined) continue
+      acc += v * kern[j + 2]
+      w += kern[j + 2]
+    }
+    sm[i] = acc / w
+  }
+  env = sm
   let mean = 0
   for (let i = 0; i < n; i++) mean += env[i]
   mean /= n || 1
@@ -35,33 +50,35 @@ export function estimateTempo(env: ArrayLike<number>, rate: number): { bpm: numb
     energy += x[i] * x[i]
   }
   if (energy < 1e-9) return { bpm: 0, confidence: 0 }
+  // fractional lags (quarter samples, linear interpolation): at a coarse envelope rate the true
+  // period rarely lands on an integer lag. each candidate also collects its second harmonic,
+  // so the real beat outscores the half-time lag that lines up just as well.
+  const ac = (lag: number) => {
+    const l0 = Math.floor(lag)
+    const f = lag - l0
+    if (l0 + 1 >= n) return 0
+    let s = 0
+    for (let i = l0 + 1; i < n; i++) s += x[i] * (x[i - l0] * (1 - f) + x[i - l0 - 1] * f)
+    return s / energy
+  }
   let best = 0
   let bestLag = 0
   let bestRaw = 0
-  const minLag = Math.floor((rate * 60) / 180)
-  const maxLag = Math.ceil((rate * 60) / 70)
-  const scores: number[] = []
-  for (let lag = minLag; lag <= maxLag && lag < n; lag++) {
-    let s = 0
-    for (let i = lag; i < n; i++) s += x[i] * x[i - lag]
-    s /= energy
-    scores[lag] = s
+  const minLag = (rate * 60) / 180
+  const maxLag = (rate * 60) / 70
+  for (let lag = minLag; lag <= maxLag && lag < n - 1; lag += 0.25) {
+    const raw = ac(lag)
     const bpm = (rate * 60) / lag
-    const prior = Math.exp(-0.5 * (Math.log2(bpm / 110) / 0.6) ** 2)
-    const score = s * (0.5 + 0.5 * prior)
+    const prior = Math.exp(-0.5 * (Math.log2(bpm / 110) / 0.8) ** 2)
+    const score = (raw + 0.5 * Math.max(0, ac(lag * 2))) * (0.6 + 0.4 * prior)
     if (score > best) {
       best = score
       bestLag = lag
-      bestRaw = s
+      bestRaw = raw
     }
   }
   if (!bestLag) return { bpm: 0, confidence: 0 }
-  // parabolic refinement around the peak
-  const a = scores[bestLag - 1] ?? bestRaw
-  const c = scores[bestLag + 1] ?? bestRaw
-  const denom = a - 2 * bestRaw + c
-  const shift = Math.abs(denom) > 1e-9 ? (0.5 * (a - c)) / denom : 0
-  const lag = bestLag + Math.max(-0.5, Math.min(0.5, shift))
+  const lag = bestLag
   return { bpm: (rate * 60) / lag, confidence: Math.max(0, Math.min(1, bestRaw)) }
 }
 
@@ -73,6 +90,7 @@ export class FeatureExtractor {
   private prevMag: Float32Array
   private bandDb = new Float32Array(LEVELS).fill(-100)
   private peak = new Float32Array(LEVELS).fill(-60)
+  private mean = new Float32Array(LEVELS).fill(-60)
   private fluxMean = new Float32Array(LEVELS).fill(0.01)
   private bandsS = new Float32Array(LEVELS)
   private hitsS = new Float32Array(LEVELS)
@@ -146,11 +164,14 @@ export class FeatureExtractor {
       globalFlux += flux
       const levelDb = 10 * Math.log10(p / (hi - lo) + 1e-12)
       this.bandDb[b] = levelDb
-      // automatic gain: a slowly falling peak, and 32 dB of range under it
+      // automatic gain, two parts: presence (is this octave sounding at all, against a slowly
+      // falling peak) and motion (where it sits against its own recent average). compressed
+      // masters sit near their peak all the time, so motion is what keeps the levels moving.
       this.peak[b] = Math.max(levelDb, this.peak[b] - 4 * dt)
-      const range = 32
-      const norm = Math.min(1, Math.max(0, (levelDb - (this.peak[b] - range)) / range))
-      const target = norm ** 1.4
+      this.mean[b] += (levelDb - this.mean[b]) * k(4)
+      const norm = Math.min(1, Math.max(0, (levelDb - (this.peak[b] - 40)) / 14))
+      const motion = Math.min(1, Math.max(0, 0.45 + (levelDb - this.mean[b]) / 10))
+      const target = norm * motion
       this.bandsS[b] += (target - this.bandsS[b]) * (target > this.bandsS[b] ? k(0.03) : k(0.22))
 
       this.fluxMean[b] += (flux - this.fluxMean[b]) * k(1.2)

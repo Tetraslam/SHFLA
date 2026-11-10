@@ -37,7 +37,16 @@ export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, on
 
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col justify-end px-6 pb-28 sm:px-12 sm:pb-32 lg:px-20">
-      <div className="pointer-events-auto max-w-3xl">
+      {/* a soft pool of dark under the words, so they read over any part of the fractal */}
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 70% 60% at 12% 82%, rgb(7 6 10 / 0.72), rgb(7 6 10 / 0.35) 55%, transparent 80%)',
+        }}
+      />
+      <div className="pointer-events-auto relative max-w-3xl">
         <h1 className="focus-in text-glow font-display text-[clamp(5.5rem,19vw,15rem)] leading-[0.8] tracking-[-0.03em] text-ink">
           shfla
         </h1>
@@ -81,7 +90,7 @@ export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, on
           className="grid transition-[grid-template-rows,opacity] duration-500 ease-[var(--ease-focus)]"
           style={{ gridTemplateRows: linkOpen ? '1fr' : '0fr', opacity: linkOpen ? 1 : 0 }}
         >
-          <div className="overflow-hidden">
+          <div className="overflow-hidden" inert={!linkOpen}>
             <form
               className="mt-5 flex max-w-xl items-center gap-2 rounded-full border border-ink/15 bg-ground/60 py-1 pr-1 pl-5 backdrop-blur-md focus-within:border-sodium/60"
               onSubmit={(e) => {
@@ -91,7 +100,6 @@ export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, on
             >
               <input
                 ref={input}
-                tabIndex={linkOpen ? 0 : -1}
                 value={link}
                 onChange={(e) => setLink(e.target.value)}
                 placeholder="https://… a direct link to an mp3, ogg, wav, or m4a"
@@ -102,7 +110,6 @@ export function Intro({ initialLinkOpen = false, busy, status, error, onDemo, on
               />
               <button
                 type="submit"
-                tabIndex={linkOpen ? 0 : -1}
                 disabled={!link.trim() || busy === 'link'}
                 className="flex size-9 items-center justify-center rounded-full bg-ink text-ground transition-opacity hover:opacity-90 disabled:opacity-30"
                 aria-label="play link"

@@ -70,7 +70,8 @@ export function App() {
     if (!canvas.current) return
     let e: Engine
     try {
-      const small = Math.max(window.screen.width, window.screen.height) < 1000 || matchMedia('(pointer: coarse)').matches
+      const small =
+        Math.max(window.screen.width, window.screen.height) < 1000 || matchMedia('(pointer: coarse)').matches
       e = new Engine(canvas.current, { finest: small ? 512 : 1024 })
     } catch (err) {
       setFatal(err instanceof Error ? err.message : String(err))
