@@ -1,11 +1,9 @@
 import { parseAsFloat, parseAsString, throttle, useQueryStates } from 'nuqs'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { AudioEngine, SourceError, type SourceKind, type SourceState } from '@/audio/engine'
 import { LEVELS } from '@/audio/frame'
-import { CommandMenu } from '@/components/command-menu'
 import { Intro } from '@/components/intro'
-import { LanguagePanel } from '@/components/language-panel'
 import { type MeterRefs, Transport } from '@/components/transport'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -14,6 +12,12 @@ import { paletteById } from '@/gpu/palettes'
 import { compile, type Program } from '@/lang/compile'
 import { DEFAULT_PRESET, PRESETS } from '@/lang/presets'
 import { decodeProgram, encodeProgram, formatTime } from '@/lib/share'
+
+// the editor and the command menu are the heavy parts; they load after first paint, on idle
+const loadPanel = () => import('@/components/language-panel')
+const loadMenu = () => import('@/components/command-menu')
+const LanguagePanel = lazy(() => loadPanel().then((m) => ({ default: m.LanguagePanel })))
+const CommandMenu = lazy(() => loadMenu().then((m) => ({ default: m.CommandMenu })))
 
 const params = {
   rule: parseAsString,
@@ -64,6 +68,19 @@ export function App() {
 
   const compiled = useMemo(() => compile(code), [code])
   const errors = compiled.ok ? [] : compiled.errors
+
+  useEffect(() => {
+    const warm = () => {
+      void loadPanel()
+      void loadMenu()
+    }
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback(warm, { timeout: 3000 })
+      return () => cancelIdleCallback(id)
+    }
+    const id = setTimeout(warm, 1500)
+    return () => clearTimeout(id)
+  }, [])
 
   // ---- engine lifecycle and the frame loop
   useEffect(() => {
@@ -373,18 +390,20 @@ export function App() {
         )}
 
         {chrome && panel && (
-          <LanguagePanel
-            code={code}
-            presetId={presetId}
-            basedOn={basedOn}
-            errors={errors}
-            gpuError={gpuError}
-            onCode={onCode}
-            onPreset={choosePreset}
-            onReseed={() => engine.current?.reseed()}
-            onShare={() => void share()}
-            onClose={() => setPanel(false)}
-          />
+          <Suspense fallback={null}>
+            <LanguagePanel
+              code={code}
+              presetId={presetId}
+              basedOn={basedOn}
+              errors={errors}
+              gpuError={gpuError}
+              onCode={onCode}
+              onPreset={choosePreset}
+              onReseed={() => engine.current?.reseed()}
+              onShare={() => void share()}
+              onClose={() => setPanel(false)}
+            />
+          </Suspense>
         )}
 
         {dragging && (
@@ -405,16 +424,18 @@ export function App() {
           }}
         />
 
-        <CommandMenu
-          open={cmdk}
-          onOpenChange={setCmdk}
-          run={action}
-          presetId={presetId}
-          paletteId={q.palette}
-          playing={!!source?.playing}
-          hasSource={!!source}
-          voiceOn={q.voice > 0}
-        />
+        <Suspense fallback={null}>
+          <CommandMenu
+            open={cmdk}
+            onOpenChange={setCmdk}
+            run={action}
+            presetId={presetId}
+            paletteId={q.palette}
+            playing={!!source?.playing}
+            hasSource={!!source}
+            voiceOn={q.voice > 0}
+          />
+        </Suspense>
         <Toaster position="top-center" />
       </main>
     </TooltipProvider>
