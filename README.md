@@ -52,6 +52,7 @@ the language can express conway's life (the haze preset) and rule 110, and both 
 - **link**: tried directly first. if the host doesn't send cors headers, it goes through `/api/audio`, a vercel function that streams public audio from our origin with range support. the function refuses private and reserved addresses (it checks dns), non-default ports, credentials, non-audio responses, and anything over 80 MB, and it follows redirects by hand so each hop is checked again.
 - **youtube links** go to `/api/yt`, which runs a pinned, checksum-verified [yt-dlp](https://github.com/yt-dlp/yt-dlp) (fetched at build by `scripts/fetch-yt-dlp.mjs`), uses the function's own node as yt-dlp's javascript runtime, and streams the audio back. yt-dlp is only ever handed a canonical `youtube.com/watch?v=<id>` built from a validated id. youtube often tells datacenter addresses to sign in, so this works for some videos and not others. when it's refused, the ui offers the tab route instead.
 - **tab** (chrome and edge on desktop): play anything in another tab (youtube, spotify, soundcloud) and share that tab. shfla only listens. the tab keeps playing itself, and nothing leaves your machine.
+- **this computer** (firefox, zen, librewolf): on linux, pipewire and pulseaudio expose each output's *monitor* as an input. shfla opens it like a mic and hears whatever is playing, from any app or tab. on mac or windows this needs a loopback device (blackhole, vb-cable). the voice stays off here so it can't feed itself.
 - **mic**: analysed, never played back.
 
 ## keys
