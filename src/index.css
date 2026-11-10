@@ -1,0 +1,137 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-mono: "Commit Mono", ui-monospace, monospace;
+  --font-heading: var(--font-display);
+
+  --color-ground: var(--ground);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-sodium: var(--sodium);
+  --color-err: var(--err);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+
+  --ease-focus: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-tick: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* one theme: light on black. the fractal palettes are the "themes". */
+:root {
+  --ground: #07060a;
+  --ink: #f3ece6;
+  --ink-muted: rgb(243 236 230 / 0.6);
+  --ink-faint: rgb(243 236 230 / 0.32);
+  --sodium: #ffb48a;
+  --err: #ff8a8a;
+
+  --background: var(--ground);
+  --foreground: var(--ink);
+  --card: rgb(12 10 15 / 0.82);
+  --card-foreground: var(--ink);
+  --popover: rgb(14 12 18 / 0.94);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--ground);
+  --secondary: rgb(243 236 230 / 0.08);
+  --secondary-foreground: var(--ink);
+  --muted: rgb(243 236 230 / 0.06);
+  --muted-foreground: var(--ink-muted);
+  --accent: rgb(243 236 230 / 0.08);
+  --accent-foreground: var(--ink);
+  --destructive: var(--err);
+  --border: rgb(243 236 230 / 0.08);
+  --input: rgb(243 236 230 / 0.12);
+  --ring: rgb(255 180 138 / 0.6);
+  --radius: 0.875rem;
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  ::selection {
+    background: rgb(255 180 138 / 0.35);
+  }
+}
+
+@layer components {
+  /* a focus pull: arrives out of focus and sharpens */
+  .focus-in {
+    animation: focus-in 520ms var(--ease-focus) both;
+  }
+  .scrim-bottom {
+    background: linear-gradient(to top, rgb(7 6 10 / 0.78), rgb(7 6 10 / 0.35) 55%, transparent);
+  }
+  .scrim-side {
+    background: linear-gradient(to left, rgb(7 6 10 / 0.86), rgb(7 6 10 / 0.7));
+    backdrop-filter: blur(24px) saturate(1.1);
+  }
+  .text-glow {
+    text-shadow:
+      0 0 24px rgb(7 6 10 / 0.7),
+      0 0 2px rgb(7 6 10 / 0.6);
+  }
+}
+
+@keyframes focus-in {
+  from {
+    opacity: 0;
+    filter: blur(12px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes focus-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
