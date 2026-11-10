@@ -1,4 +1,4 @@
-import { FUNCTION_MAP, OUTPUT_NAMES, VARIABLE_NAMES } from './builtins'
+import { FUNCTION_MAP, OUTPUT_NAMES, SPEED_INPUTS, VARIABLE_NAMES } from './builtins'
 import { ShflaError } from './lexer'
 import { type Expr, parse, type Stmt } from './parser'
 
@@ -13,7 +13,9 @@ export interface Program {
   stmts: Stmt[]
   /** builtin variables and functions the program reads, so the shader only pays for those */
   uses: Set<string>
-  has: { split: boolean; seed: boolean }
+  has: { split: boolean; seed: boolean; speed: boolean; light: boolean }
+  /** the statements `speed` depends on, in order; evaluated on the cpu once per level per tick */
+  speedSlice: Stmt[]
   glsl: string
 }
 
@@ -99,16 +101,81 @@ export function compile(source: string): CompileResult {
   }
   if (errors.length) return { ok: false, errors }
 
+  const speedSlice = sliceFor(stmts, 'speed')
+  for (const s of speedSlice) {
+    walk(s.expr, (e) => {
+      const bad =
+        (e.kind === 'name' && VARIABLE_NAMES.has(e.name) && !SPEED_INPUTS.has(e.name)) ||
+        (e.kind === 'call' && (e.name === 'nb' || e.name === 'count' || e.name === 'hash'))
+      if (bad) {
+        errors.push({
+          message: `speed is decided once per level, so it can read the song, time, and the level, but not ${e.kind === 'call' ? `${e.name}()` : `"${e.name}"`}`,
+          from: e.from,
+          to: e.kind === 'call' ? e.nameTo : e.to,
+        })
+      }
+    })
+  }
+  if (errors.length) return { ok: false, errors }
+
   return {
     ok: true,
     program: {
       source,
       stmts,
       uses,
-      has: { split: defined.has('split'), seed: defined.has('seed') },
+      has: {
+        split: defined.has('split'),
+        seed: defined.has('seed'),
+        speed: defined.has('speed'),
+        light: defined.has('light'),
+      },
+      speedSlice,
       glsl: toGLSL(stmts),
     },
   }
+}
+
+function walk(e: Expr, fn: (e: Expr) => void) {
+  fn(e)
+  if (e.kind === 'unary') walk(e.arg, fn)
+  else if (e.kind === 'binary') {
+    walk(e.left, fn)
+    walk(e.right, fn)
+  } else if (e.kind === 'if') {
+    walk(e.cond, fn)
+    walk(e.yes, fn)
+    walk(e.no, fn)
+  } else if (e.kind === 'call') for (const a of e.args) walk(a, fn)
+}
+
+/** the statements an output depends on, honoring reassignment order */
+function sliceFor(stmts: Stmt[], output: string): Stmt[] {
+  let last = -1
+  for (let i = 0; i < stmts.length; i++) if (stmts[i].name === output) last = i
+  if (last < 0) return []
+  const needed = new Set([output])
+  const keep: Stmt[] = []
+  for (let i = last; i >= 0; i--) {
+    const s = stmts[i]
+    if (!needed.has(s.name)) continue
+    needed.delete(s.name)
+    keep.push(s)
+    walk(s.expr, (e) => {
+      if (e.kind === 'name' && !VARIABLE_NAMES.has(e.name)) needed.add(e.name)
+    })
+  }
+  return keep.reverse()
+}
+
+/** steps this level takes per tick: 0 freezes it, capped at 16 */
+export function evalSpeed(program: Program, vars: Record<string, number>): number {
+  if (!program.has.speed) return 1
+  const env: Record<string, number> = {}
+  const ctx: CellContext = { vars, nb: () => 0, hash: () => 0 }
+  for (const s of program.speedSlice) env[s.name] = evalExpr(s.expr, env, ctx)
+  const v = env.speed
+  return Number.isFinite(v) ? Math.max(0, Math.min(16, Math.round(v))) : 1
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +264,7 @@ function toGLSL(stmts: Stmt[]): string {
   lines.push(`  float out_step = v_step;`)
   lines.push(`  float out_split = ${declared.has('split') ? 'v_split' : 'b_self'};`)
   lines.push(`  float out_seed = ${declared.has('seed') ? 'v_seed' : '(b_rand < 0.2 ? 1.0 : 0.0)'};`)
+  lines.push(`  float out_light = ${declared.has('light') ? 'clamp(v_light, 0.0, 1.0)' : '-1.0'};`)
   return lines.join('\n')
 }
 

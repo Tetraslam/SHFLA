@@ -102,6 +102,7 @@ void main() {
   vec4 src = texelFetch(u_src, sh_wrap(g_src), 0);
 #endif
   float b_self = src.r;
+  float b_prev = src.g;
   float b_x = float(g_cell.x);
   float b_y = float(g_cell.y);
   float b_qx = float(g_cell.x % 2);
@@ -155,12 +156,14 @@ ${program.glsl}
   float next = out_seed;
 #endif
   next = (isnan(next) || isinf(next)) ? 0.0 : clamp(next, 0.0, 1.0);
+  // b is what you see: the program's light if it has one, otherwise the state with an afterglow
+  bool own = out_light >= 0.0 && !isnan(out_light);
 #if MODE == ${MODE_STEP}
-  o = vec4(next, b_self, max(next, src.b * u_decay), 1.0);
+  o = vec4(next, b_self, own ? out_light : max(next, src.b * u_decay), 1.0);
 #elif MODE == ${MODE_SPLIT}
-  o = vec4(next, next, max(next, src.b * 0.85), 1.0);
+  o = vec4(next, next, own ? out_light : max(next, src.b * 0.85), 1.0);
 #else
-  o = vec4(next, next, next, 1.0);
+  o = vec4(next, next, own ? out_light : next, 1.0);
 #endif
 }
 `
@@ -179,8 +182,7 @@ void main() {
 
 const levelSamples = Array.from(
   { length: LEVELS },
-  (_, k) =>
-    `  acc += u_col[${k}] * u_w[${k}] * levelLight(u_l${k}, u_size[${k}], uv, ${(1 - k / (LEVELS - 1)).toFixed(3)});`,
+  (_, k) => `  acc += u_col[${k}] * u_w[${k}] * levelLight(u_l${k}, u_size[${k}], uv, u_coc[${k}]);`,
 ).join('\n')
 
 /**
@@ -197,23 +199,28 @@ uniform float u_rot;
 uniform float u_w[${LEVELS}];
 uniform vec3 u_col[${LEVELS}];
 uniform float u_size[${LEVELS}];
+uniform float u_coc[${LEVELS}];
 uniform float u_fbDecay;
 uniform float u_fbZoom;
 uniform float u_fbRot;
 uniform float u_warp;
 uniform float u_t;
+uniform float u_lightMode;
 out vec4 o;
 
-vec3 levelLight(sampler2D tex, float size, vec2 uv, float soft) {
-  // coarse levels are out of focus: a rotated four-tap spread, wider the coarser the level
-  float r = (0.35 + soft * 0.9) / size;
-  vec4 a = texture(tex, uv + vec2(r, r * 0.4));
-  vec4 b = texture(tex, uv + vec2(-r * 0.4, r));
-  vec4 c = texture(tex, uv + vec2(-r, -r * 0.4));
-  vec4 d = texture(tex, uv + vec2(r * 0.4, -r));
-  vec4 s = 0.25 * (a + b + c + d);
+// depth of field: each level is blurred by its circle of confusion (distance from the focal
+// plane), over a small golden-angle disc. the in-focus level stays crisp.
+vec3 levelLight(sampler2D tex, float size, vec2 uv, float coc) {
+  float r = 0.3 / size + coc * 0.0045;
+  vec4 s = texture(tex, uv) * 0.25;
+  const float GA = 2.39996323;
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i) + 0.5;
+    float a = fi * GA + u_t * 0.05;
+    s += texture(tex, uv + vec2(cos(a), sin(a)) * r * sqrt(fi / 6.0)) * 0.125;
+  }
   float born = max(s.r - s.g, 0.0);
-  float e = s.r * 0.9 + s.b * 0.42 + born * 0.9;
+  float e = u_lightMode > 0.5 ? s.b * 1.3 : s.r * 0.9 + s.b * 0.42 + born * 0.9;
   return vec3(e);
 }
 

@@ -1,5 +1,5 @@
 import { type AudioFrame, LEVELS } from '@/audio/frame'
-import type { Program } from '@/lang/compile'
+import { evalSpeed, type Program } from '@/lang/compile'
 import { freeTarget, GLError, makePass, makeTarget, type Pass, type Target, type TexFormat } from './gl'
 import { PALETTES, type Palette, ramp } from './palettes'
 import {
@@ -77,6 +77,8 @@ export class Engine {
   depth = 0
   frac = 0
   lost = false
+  /** stops the clocks; used by the in-browser checks */
+  frozen = false
 
   private tickPos = 0
   private tickCount = 0
@@ -84,10 +86,16 @@ export class Engine {
   private rot = 0
   private salt = (Math.random() * 1e6) | 0
   private frameNo = 0
+  private sub = 0
+  private dt = 1 / 60
   private exposure = 1
+  private adapt = 1
   private loudS = 0
   private bassS = 0
   private midS = 0
+  private highS = 0
+  /** the focal plane, in levels: the song racks it between coarse and fine */
+  focus = 2.6
 
   readonly canvas: HTMLCanvasElement
 
@@ -230,7 +238,7 @@ export class Engine {
     this.u1f(p, 'u_depth', this.depth)
     this.u1f(p, 'u_tick', Math.floor(this.tickCount / 2 ** (LEVELS - 1 - k)))
     this.u1f(p, 'u_t', this.t)
-    this.u1f(p, 'u_salt', (this.salt + this.depth * 7919) % 16777216)
+    this.u1f(p, 'u_salt', (this.salt + this.depth * 7919 + this.sub * 131) % 16777216)
     this.u1f(p, 'u_decay', 0.86)
     this.u1f(p, 'u_band', a.bands[k])
     this.u1f(p, 'u_hit', a.hits[k])
@@ -242,6 +250,26 @@ export class Engine {
     this.u1f(p, 'u_phase', a.phase)
     this.u1f(p, 'u_bright', a.bright)
     this.u1i(p, 'u_size', this.levels[k].size)
+  }
+
+  private speedVars(k: number, a: AudioFrame): Record<string, number> {
+    return {
+      level: k,
+      levels: LEVELS,
+      size: this.levels[k].size,
+      depth: this.depth,
+      tick: Math.floor(this.tickCount / 2 ** (LEVELS - 1 - k)),
+      t: this.t,
+      band: a.bands[k],
+      hit: a.hits[k],
+      bass: a.bass,
+      mid: a.mid,
+      high: a.high,
+      loud: a.loud,
+      beat: a.beat,
+      phase: a.phase,
+      bright: a.bright,
+    }
   }
 
   /** Grow the whole pyramid from scratch: seed the coarsest level, then split down to the finest. */
@@ -339,8 +367,9 @@ export class Engine {
 
   /** Advance the clocks and draw one frame. */
   frame(dt: number, a: AudioFrame) {
-    if (this.lost || !this.sim) return
+    if (this.lost || !this.sim || this.frozen) return
     dt = Math.min(dt, 0.1)
+    this.dt = dt
     this.t += dt
     this.frameNo++
     const s = this.settings
@@ -350,6 +379,11 @@ export class Engine {
     this.loudS += (a.loud - this.loudS) * k(0.6)
     this.bassS += (a.bass - this.bassS) * k(0.25)
     this.midS += (a.mid - this.midS) * k(0.4)
+    this.highS += (a.high - this.highS) * k(0.4)
+    // rack focus: low-heavy moments pull toward the coarse levels, bright ones toward the fine
+    const tilt = (this.highS + 0.5 * this.midS - this.bassS) / (this.highS + this.midS + this.bassS + 0.15)
+    const target = a.live ? 2.5 + 1.4 * tilt : 2.5 + 0.9 * Math.sin(this.t * 0.11)
+    this.focus += (target - this.focus) * k(rm ? 4 : 1.6)
 
     // the step clock: finest level steps TICKS_PER_BEAT times per beat
     const beatsPerSec = a.bpm / 60
@@ -359,7 +393,10 @@ export class Engine {
       this.tickPos -= 1
       this.tickCount++
       for (let lv = 0; lv < LEVELS; lv++) {
-        if (this.tickCount % 2 ** (LEVELS - 1 - lv) === 0) this.stepLevel(lv, a)
+        if (this.tickCount % 2 ** (LEVELS - 1 - lv) !== 0) continue
+        const n = this.program ? evalSpeed(this.program, this.speedVars(lv, a)) : 1
+        for (this.sub = 0; this.sub < n; this.sub++) this.stepLevel(lv, a)
+        this.sub = 0
       }
     }
     this.tickPos = Math.min(this.tickPos, 1)
@@ -394,6 +431,7 @@ export class Engine {
     const c = this.composite
     this.bindPass(c)
     const w: number[] = []
+    const coc: number[] = []
     const col: number[] = []
     const sizes: number[] = []
     for (let k = 0; k < LEVELS; k++) {
@@ -401,7 +439,11 @@ export class Engine {
       // fades in at the fine end and out at the coarse end so an octave shift never pops,
       // leaning toward the fine levels so structure, not haze, carries the picture
       const u = (p + 1) / LEVELS
-      const bump = Math.max(0, Math.sin(Math.PI * u)) ** 0.6 * (0.3 + 1.1 * u)
+      // a window that is zero at both ends, so octave shifts never pop, times a focal plane
+      const window = Math.max(0, Math.sin(Math.PI * u)) ** 0.5
+      const off = p - this.focus
+      const bump = window * (0.18 + Math.exp(-0.5 * (off / 1.05) ** 2))
+      coc.push(Math.min(1, Math.max(0, Math.abs(off) - 0.4) * 0.45))
       const hit = rm ? 0 : a.hits[k]
       w.push(bump * (0.3 + 0.9 * a.bands[k] + 0.3 * hit) * 0.5)
       const rgb = ramp(pal, p / (LEVELS - 1) + (a.bright - 0.45) * 0.3)
@@ -412,16 +454,20 @@ export class Engine {
     gl.uniform1fv(c.uniforms.get('u_w') ?? null, w)
     gl.uniform3fv(c.uniforms.get('u_col') ?? null, col)
     gl.uniform1fv(c.uniforms.get('u_size') ?? null, sizes)
+    gl.uniform1fv(c.uniforms.get('u_coc') ?? null, coc)
     this.tex(c, 'u_prev', LEVELS, fb[0].tex)
     this.u2f(c, 'u_res', this.width, this.height)
     this.u1f(c, 'u_scale', MAGNIFY * 2 ** this.frac)
     this.u1f(c, 'u_rot', this.rot)
-    const decay = rm ? 0.7 : Math.min(0.93, 0.8 + 0.13 * this.loudS)
+    // decay is specified per 60 Hz frame and converted, so trails last the same time at any frame rate
+    const decay60 = rm ? 0.7 : Math.min(0.93, 0.8 + 0.13 * this.loudS)
+    const decay = decay60 ** (this.dt * 60)
     this.u1f(c, 'u_fbDecay', decay)
     this.u1f(c, 'u_fbZoom', 2 ** dFrac * (1 + (rm ? 0 : 0.0025 + 0.006 * this.bassS)))
     this.u1f(c, 'u_fbRot', dRot)
     this.u1f(c, 'u_warp', rm ? 0 : 0.0008 + 0.003 * this.midS)
     this.u1f(c, 'u_t', this.t)
+    this.u1f(c, 'u_lightMode', this.program?.has.light ? 1 : 0)
     this.drawTo(fb[1])
 
     // bloom chain: quarter res, then a tenth
@@ -449,9 +495,19 @@ export class Engine {
     this.tex(f, 'u_bloomB', 2, eb.tex)
     this.u2f(f, 'u_res', this.width, this.height)
     this.u1f(f, 'u_ca', rm ? 0.002 : 0.004 + 0.014 * this.bassS)
+    // the lens adapts: estimate how much light the levels put out (from the last readback) and
+    // expose for it, so a dense rule doesn't blow out and a sparse one doesn't vanish
+    let scene = 0
+    const lightMode = !!this.program?.has.light
+    for (let k = 0; k < LEVELS; k++) {
+      const act = this.activity[k]
+      scene += w[k] * (lightMode ? act.trail * 1.3 : act.state * 0.9 + act.trail * 0.42)
+    }
+    const adapt = Math.min(2, Math.max(0.05, 0.2 / Math.max(scene, 0.05)))
+    this.adapt += (adapt - this.adapt) * (1 - Math.exp(-this.dt / 0.8))
     // brightness follows the beat, but slew-limited so it never strobes
     const swell = rm ? 0 : 0.16 * a.beat * this.loudS
-    this.exposure = slew(this.exposure, (1 - decay) * 2.4 * (1 + swell), 1.2 * (1 / 60))
+    this.exposure = slew(this.exposure, (1 - decay) * 2.4 * this.adapt * (1 + swell), 1.2 * this.dt)
     this.u1f(f, 'u_exposure', this.exposure)
     const hz = 0.18 + 0.5 * this.loudS
     this.u3f(
@@ -491,11 +547,30 @@ export class Engine {
     const l = this.levels[k]
     gl.bindFramebuffer(gl.FRAMEBUFFER, l.cur.fbo)
     const data = new Float32Array(l.size * l.size * 4)
-    gl.readPixels(0, 0, l.size, l.size, gl.RGBA, gl.FLOAT, data)
+    if (this.fmt.type === gl.UNSIGNED_BYTE) {
+      const bytes = new Uint8Array(l.size * l.size * 4)
+      gl.readPixels(0, 0, l.size, l.size, gl.RGBA, gl.UNSIGNED_BYTE, bytes)
+      for (let i = 0; i < bytes.length; i++) data[i] = bytes[i] / 255
+    } else gl.readPixels(0, 0, l.size, l.size, gl.RGBA, gl.FLOAT, data)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     const out = new Float32Array(l.size * l.size)
     for (let i = 0; i < out.length; i++) out[i] = data[i * 4]
     return { size: l.size, data: out }
+  }
+
+  /** Overwrite one level's state. Used by the in-browser checks. */
+  debugWrite(k: number, states: ArrayLike<number>) {
+    const gl = this.gl
+    const l = this.levels[k]
+    const rgba = new Float32Array(l.size * l.size * 4)
+    for (let i = 0; i < l.size * l.size; i++) {
+      rgba[i * 4] = states[i]
+      rgba[i * 4 + 1] = states[i]
+      rgba[i * 4 + 2] = states[i]
+      rgba[i * 4 + 3] = 1
+    }
+    gl.bindTexture(gl.TEXTURE_2D, l.cur.tex)
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, l.size, l.size, gl.RGBA, gl.FLOAT, rgba)
   }
 
   /** Step one level by hand, outside the clock. Used by the in-browser checks. */

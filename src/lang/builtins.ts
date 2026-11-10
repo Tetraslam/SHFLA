@@ -8,6 +8,7 @@ export interface VarDoc {
 
 export const VARIABLES: VarDoc[] = [
   { name: 'self', group: 'cell', doc: 'this cell, 0 to 1. in split, the parent being divided' },
+  { name: 'prev', group: 'cell', doc: 'this cell one step ago' },
   { name: 'sum', group: 'cell', doc: 'the 8 neighbors added up' },
   { name: 'rand', group: 'cell', doc: 'a fresh random number, per cell, per step' },
   { name: 'x', group: 'cell', doc: 'column of this cell' },
@@ -65,8 +66,24 @@ export const FUNCTIONS: FnDoc[] = [
 export const OUTPUTS = [
   { name: 'step', doc: 'required. the next state of every cell, every step' },
   { name: 'split', doc: 'what a new finer cell becomes when the zoom passes an octave. default: self' },
+  { name: 'light', doc: 'how bright the cell looks, 0 to 1. default: its state, with an afterglow' },
   { name: 'seed', doc: 'the state everything starts from. default: rand < 0.2' },
+  {
+    name: 'speed',
+    doc: 'steps per tick for each level, 0 to 16. reads only the song, time, and the level. default: 1',
+  },
 ] as const
+
+/** what speed may read: it is decided once per level per tick, not per cell */
+export const SPEED_INPUTS = new Set([
+  'level',
+  'levels',
+  'size',
+  'depth',
+  'tick',
+  't',
+  ...VARIABLES.filter((v) => v.group === 'music').map((v) => v.name),
+])
 
 export const VARIABLE_NAMES = new Set(VARIABLES.map((v) => v.name))
 export const FUNCTION_MAP = new Map(FUNCTIONS.map((f) => [f.name, f]))

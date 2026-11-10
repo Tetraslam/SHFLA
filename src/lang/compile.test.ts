@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { type CellContext, compile, evalCell } from './compile'
+import { type CellContext, compile, evalCell, evalSpeed } from './compile'
 import type { Stmt } from './parser'
 import { PRESETS } from './presets'
 
@@ -22,7 +22,20 @@ function run(stmts: Stmt[], grid: number[][], steps: number, extra: (y: number, 
         let sum = 0
         for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) sum += nb(dx, dy)
         const ctx: CellContext = {
-          vars: { self, sum, x, y, qx: x % 2, qy: y % 2, size: w, rand: 0.99, hit: 0, tick: s + 1, ...extra(y, s) },
+          vars: {
+            self,
+            prev: self,
+            sum,
+            x,
+            y,
+            qx: x % 2,
+            qy: y % 2,
+            size: w,
+            rand: 0.99,
+            hit: 0,
+            tick: s + 1,
+            ...extra(y, s),
+          },
           nb,
           hash: () => 0.99,
         }
@@ -90,6 +103,25 @@ describe('parser and checker', () => {
   })
 })
 
+describe('speed', () => {
+  it('evaluates on the cpu from the song and the level', () => {
+    const p = ok('fast = 2 + level\nspeed = if loud > 0.5 then fast * 2 else fast\nstep = self')
+    expect(evalSpeed(p, { level: 1, loud: 0.9 })).toBe(6)
+    expect(evalSpeed(p, { level: 0, loud: 0 })).toBe(2)
+    expect(evalSpeed(ok('speed = 99\nstep = self'), {})).toBe(16)
+    expect(evalSpeed(ok('step = self'), {})).toBe(1)
+  })
+
+  it('refuses per-cell inputs', () => {
+    const r = compile('a = self\nspeed = a\nstep = self')
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.errors[0].message).toMatch(/speed/)
+    expect(compile('speed = nb(0, 1)\nstep = self').ok).toBe(false)
+    // a per-cell name that speed does not depend on is fine
+    expect(compile('a = self\nspeed = 2\nstep = a').ok).toBe(true)
+  })
+})
+
 describe('semantics', () => {
   it('has fuzzy equality, truthiness at 0.5, and safe division', () => {
     const p = ok('a = 0.33 == 0.34\nb = 0.5 and 0.49\nc = 1 / 0\nstep = a * 4 + b * 2 + c')
@@ -119,20 +151,25 @@ describe('semantics', () => {
     expect(cells(after)).toEqual(moved.sort())
   })
 
-  it('runs rule 110 exactly, row by row', () => {
+  it('runs rule 110 exactly: the newest row at the bottom, history scrolling up', () => {
     const rule = ok(PRESETS.find((p) => p.id === 'rule110')?.source ?? '').stmts
     const w = 16
-    const rows = 8
-    const g = Array.from({ length: rows }, () => Array(w).fill(0))
-    g[0][w - 1] = 1
-    // step s writes row s+1 (tick = s + 1), like the shader
-    const out = run(rule, g, rows - 1)
-    // reference rule 110
-    const ref: number[][] = [g[0]]
-    for (let r = 1; r < rows; r++) {
+    const h = 16
+    const g = Array.from({ length: h }, () => Array(w).fill(0))
+    g[h - 1][w - 1] = 1
+    const steps = 9
+    const out = run(rule, g, steps)
+    // reference: rows of rule 110 from the single seed cell
+    const ref: number[][] = [g[h - 1]]
+    for (let r = 1; r <= steps; r++) {
       const p = ref[r - 1]
       ref.push(p.map((_, x) => (110 >> ((p[(x - 1 + w) % w] << 2) | (p[x] << 1) | p[(x + 1) % w])) & 1))
     }
-    expect(out.map((r) => r.map((v) => (v > 0.5 ? 1 : 0)))).toEqual(ref)
+    for (let j = 0; j <= steps; j++) {
+      expect(
+        out[h - 1 - j].map((v) => (v > 0.5 ? 1 : 0)),
+        `row ${j} back`,
+      ).toEqual(ref[steps - j])
+    }
   })
 })

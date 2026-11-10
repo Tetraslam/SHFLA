@@ -36,7 +36,7 @@ export function LanguagePanel(p: Props) {
 
   return (
     <aside
-      className="focus-in scrim-side absolute inset-y-0 right-0 z-20 flex w-full flex-col border-l border-ink/[0.07] sm:w-[480px]"
+      className="focus-in scrim-side absolute top-0 right-0 bottom-16 z-20 flex w-full flex-col border-b border-l border-ink/[0.07] sm:w-[480px] sm:rounded-bl-[14px]"
       aria-label="the language"
     >
       <header className="flex items-start justify-between gap-4 px-6 pt-6 pb-2">
@@ -80,9 +80,7 @@ export function LanguagePanel(p: Props) {
         ) : (
           <>
             <span className="size-1.5 shrink-0 rounded-full bg-sodium" />
-            <span className="truncate text-ink-muted">
-              running on six scales. the last good version keeps running while you type
-            </span>
+            <span className="truncate text-ink-muted">running on six scales. edits apply as you type</span>
           </>
         )}
       </div>
